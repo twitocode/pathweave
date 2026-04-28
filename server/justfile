@@ -1,0 +1,23 @@
+default:
+    @just --list
+
+run:
+    ${GO:-go} run ./cmd/api
+
+test:
+    ${GO:-go} test ./...
+
+tidy:
+    ${GO:-go} mod tidy
+
+sqlc:
+    sqlc generate
+
+lint:
+    ${GO:-go} test ./...
+
+dev:
+    ${AIR:-air} -c .air.toml
+
+air-install:
+    ${GO:-go} install github.com/air-verse/air@latest

@@ -1,0 +1,5 @@
+dev:
+	.venv/bin/python -m fastapi dev src/main.py --port 8001
+
+sync:
+	uv sync
