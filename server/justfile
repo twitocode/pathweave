@@ -21,3 +21,9 @@ dev:
 
 air-install:
     ${GO:-go} install github.com/air-verse/air@latest
+
+#commands to remember
+# goose up
+# goose down
+# goose create
+# sqlc generate

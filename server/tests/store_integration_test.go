@@ -7,8 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
-	"github.com/twitocode/pathweave/go-api/internal/store"
+	"github.com/twitocode/pathweave/go-api/internal/db"
+	"github.com/twitocode/pathweave/go-api/internal/service"
 )
 
 func TestGetOrCreateUserByEmail_Integration(t *testing.T) {
@@ -35,12 +37,15 @@ func TestGetOrCreateUserByEmail_Integration(t *testing.T) {
 	uniqueEmail := "integration_test_user@example.com"
 	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE email = $1", uniqueEmail)
 
-	st := store.New(pool)
-	user, err := st.GetOrCreateUserByEmail(ctx, uniqueEmail)
+	queries := db.New(pool)
+	log := zap.NewNop()
+	userSvc := service.NewUserService(queries, log)
+
+	user, err := userSvc.GetOrCreateByEmail(ctx, uniqueEmail)
 	require.NoError(t, err)
 	require.Equal(t, uniqueEmail, user.Email)
 
-	sameUser, err := st.GetOrCreateUserByEmail(ctx, uniqueEmail)
+	sameUser, err := userSvc.GetOrCreateByEmail(ctx, uniqueEmail)
 	require.NoError(t, err)
 	require.Equal(t, user.ID, sameUser.ID)
 }

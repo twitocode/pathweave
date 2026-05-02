@@ -1,37 +1,45 @@
-package auth
+package service
 
 import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/workos/workos-go/v7"
+	"go.uber.org/zap"
 
 	"github.com/twitocode/pathweave/go-api/internal/config"
-	"github.com/twitocode/pathweave/go-api/internal/store"
-	"github.com/twitocode/pathweave/go-api/internal/store/sqlcgen"
+	"github.com/twitocode/pathweave/go-api/internal/db"
 )
 
 const SessionCookieName = "wos_session"
 
-type Service struct {
-	cfg          config.Config
+var (
+	ErrNoSession    = errors.New("no session cookie provided")
+	ErrUnauthorized = errors.New("unauthorized")
+)
+
+type AuthService struct {
+	cfg          *config.Config
 	client       *workos.Client
 	publicClient *workos.PublicClient
-	store        *store.Store
+	queries      *db.Queries
+	log          *zap.Logger
 }
 
-func NewService(cfg config.Config, s *store.Store) *Service {
+func NewAuthService(cfg *config.Config, queries *db.Queries, log *zap.Logger) *AuthService {
 	client := workos.NewClient(cfg.WorkOSAPIKey, workos.WithClientID(cfg.WorkOSClientID))
 	publicClient := workos.NewPublicClient(cfg.WorkOSClientID)
-	return &Service{
+	return &AuthService{
 		cfg:          cfg,
 		client:       client,
 		publicClient: publicClient,
-		store:        s,
+		queries:      queries,
+		log:          log,
 	}
 }
 
-func (s *Service) LoginURL() (string, error) {
+func (s *AuthService) LoginURL() (string, error) {
 	provider := "GoogleOAuth"
 	result, err := s.publicClient.GetAuthorizationURL(workos.AuthKitAuthorizationURLParams{
 		RedirectURI: s.cfg.WorkOSRedirectURI,
@@ -44,21 +52,21 @@ func (s *Service) LoginURL() (string, error) {
 	return result.URL, nil
 }
 
-func (s *Service) AuthenticateWithCode(ctx context.Context, code string) (sealedSession string, user sqlcgen.User, err error) {
+func (s *AuthService) AuthenticateWithCode(ctx context.Context, code string) (sealedSession string, user db.User, err error) {
 	authResponse, err := s.client.UserManagement().AuthenticateWithCode(ctx, &workos.UserManagementAuthenticateWithCodeParams{
 		Code: code,
 	})
 	if err != nil {
-		return "", sqlcgen.User{}, err
+		return "", db.User{}, err
 	}
 
 	if authResponse.User == nil || authResponse.User.Email == "" {
-		return "", sqlcgen.User{}, errors.New("workos user email missing")
+		return "", db.User{}, errors.New("workos user email missing")
 	}
 
-	user, err = s.store.GetOrCreateUserByEmail(ctx, authResponse.User.Email)
+	user, err = s.GetOrCreateUserByEmail(ctx, authResponse.User.Email)
 	if err != nil {
-		return "", sqlcgen.User{}, err
+		return "", db.User{}, err
 	}
 
 	sealedSession, err = workos.SealSessionFromAuthResponse(
@@ -69,12 +77,12 @@ func (s *Service) AuthenticateWithCode(ctx context.Context, code string) (sealed
 		s.cfg.WorkOSCookiePassword,
 	)
 	if err != nil {
-		return "", sqlcgen.User{}, err
+		return "", db.User{}, err
 	}
 	return sealedSession, user, nil
 }
 
-func (s *Service) GetLogoutURL(ctx context.Context, sealedSession string) (string, error) {
+func (s *AuthService) GetLogoutURL(ctx context.Context, sealedSession string) (string, error) {
 	if sealedSession == "" {
 		return s.cfg.FrontendAppURL, nil
 	}
@@ -87,15 +95,15 @@ func (s *Service) GetLogoutURL(ctx context.Context, sealedSession string) (strin
 	return logoutURL, nil
 }
 
-func (s *Service) AuthenticateSession(ctx context.Context, sealedSession string) (*sqlcgen.User, string, error) {
+func (s *AuthService) AuthenticateSession(ctx context.Context, sealedSession string) (*db.User, string, error) {
 	if sealedSession == "" {
-		return nil, "", errors.New("no session cookie provided")
+		return nil, "", ErrNoSession
 	}
 	session := workos.NewSession(s.client, sealedSession, s.cfg.WorkOSCookiePassword)
 	authResult, err := session.Authenticate()
 
 	if err == nil && authResult.Authenticated && authResult.User != nil {
-		dbUser, dbErr := s.store.GetOrCreateUserByEmail(ctx, authResult.User.Email)
+		dbUser, dbErr := s.GetOrCreateUserByEmail(ctx, authResult.User.Email)
 		if dbErr != nil {
 			return nil, "", dbErr
 		}
@@ -107,21 +115,32 @@ func (s *Service) AuthenticateSession(ctx context.Context, sealedSession string)
 		if err != nil {
 			return nil, "", err
 		}
-		return nil, "", errors.New("session is not authenticated")
+		return nil, "", ErrUnauthorized
 	}
 
 	refreshedSession := workos.NewSession(s.client, refreshed.SealedSession, s.cfg.WorkOSCookiePassword)
 	refreshedAuth, secondErr := refreshedSession.Authenticate()
-  
+
 	if secondErr != nil || !refreshedAuth.Authenticated || refreshedAuth.User == nil {
 		if secondErr != nil {
 			return nil, "", secondErr
 		}
-		return nil, "", errors.New("refreshed session is not authenticated")
+		return nil, "", ErrUnauthorized
 	}
-	dbUser, dbErr := s.store.GetOrCreateUserByEmail(ctx, refreshedAuth.User.Email)
+	dbUser, dbErr := s.GetOrCreateUserByEmail(ctx, refreshedAuth.User.Email)
 	if dbErr != nil {
 		return nil, "", dbErr
 	}
 	return &dbUser, refreshed.SealedSession, nil
+}
+
+func (s *AuthService) GetOrCreateUserByEmail(ctx context.Context, email string) (db.User, error) {
+	user, err := s.queries.GetUserByEmail(ctx, email)
+	if err == nil {
+		return user, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return s.queries.CreateUser(ctx, email)
+	}
+	return db.User{}, err
 }

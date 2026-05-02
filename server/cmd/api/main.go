@@ -2,53 +2,78 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/twitocode/pathweave/go-api/internal/api"
-	"github.com/twitocode/pathweave/go-api/internal/auth"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
+	"go.uber.org/zap"
+
+	"github.com/twitocode/pathweave/go-api/internal/app"
 	"github.com/twitocode/pathweave/go-api/internal/config"
-	"github.com/twitocode/pathweave/go-api/internal/db"
-	"github.com/twitocode/pathweave/go-api/internal/service"
-	"github.com/twitocode/pathweave/go-api/internal/store"
 )
 
-func main() {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("load config: %v", err)
+func run(ctx context.Context, getenv func(string) string) error {
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("load .env: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
+	cfg := config.New(getenv)
+	logger := config.NewLogger(getenv)
+	defer func() { _ = logger.Sync() }()
+
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("database startup failed: %v", err)
+		return fmt.Errorf("db pool: %w", err)
 	}
 	defer pool.Close()
 
-	st := store.New(pool)
-	authService := auth.NewService(cfg, st)
-	aiClient := service.NewAIClient(cfg.PythonAIBaseURL, cfg.InternalServiceToken)
+	if err := pool.Ping(ctx); err != nil {
+		return fmt.Errorf("db ping: %w", err)
+	}
 
-	router := api.NewRouter(
-		api.NewAuthHandlers(cfg, authService),
-		api.NewDomainHandlers(),
-		api.NewAIHandlers(aiClient),
-	)
+	services := app.NewServices(cfg, pool, logger)
+	handler := app.NewServer(cfg, services, logger)
 
-	server := &http.Server{
+	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      router,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  30 * time.Second,
 	}
 
-	log.Printf("go api listening on :%s", cfg.Port)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server failed: %v", err)
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("starting server", zap.String("port", cfg.Port))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		logger.Info("shutting down server")
+	case err := <-errCh:
+		return err
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	return srv.Shutdown(shutdownCtx)
+}
+
+func main() {
+	if err := run(context.Background(), os.Getenv); err != nil {
+		log.Fatal(err)
 	}
 }

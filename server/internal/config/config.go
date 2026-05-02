@@ -1,15 +1,16 @@
 package config
 
 import (
-	"errors"
-	"os"
 	"strings"
 
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 type Config struct {
+	Host                 string
 	Port                 string
+	AppEnv               string
 	DatabaseURL          string
 	FrontendAppURL       string
 	WorkOSAPIKey         string
@@ -19,40 +20,55 @@ type Config struct {
 	SecretKey            string
 	InternalServiceToken string
 	PythonAIBaseURL      string
+	AllowedOrigins       []string
+
+	DevBypassAuth      bool
+	DevBypassAuthEmail string
 }
 
-func Load() (Config, error) {
+func New(getenv func(string) string) *Config {
 	_ = godotenv.Load(".env")
 
-	cfg := Config{
-		Port:                 getEnv("PORT", "8000"),
-		DatabaseURL:          getEnv("DATABASE_URL", ""),
-		FrontendAppURL:       getEnv("FRONTEND_APP_URL", "http://localhost:3000"),
-		WorkOSAPIKey:         getEnv("WORKOS_API_KEY", ""),
-		WorkOSClientID:       getEnv("WORKOS_CLIENT_ID", ""),
-		WorkOSCookiePassword: getEnv("WORKOS_COOKIE_PASSWORD", ""),
-		WorkOSRedirectURI:    getEnv("WORKOS_REDIRECT_URI", "http://localhost:8000/auth/callback"),
-		SecretKey:            getEnv("SECRET_KEY", ""),
-		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
-		PythonAIBaseURL:      strings.TrimRight(getEnv("PYTHON_AI_BASE_URL", "http://localhost:8000"), "/"),
+	port := getenv("PORT")
+	if port == "" {
+		port = "8000"
 	}
 
-	if cfg.DatabaseURL == "" {
-		return Config{}, errors.New("DATABASE_URL is required")
+	allowedOrigins := []string{getenv("FRONTEND_APP_URL")}
+	if allowedOrigins[0] == "" {
+		allowedOrigins = []string{"http://localhost:3000"}
 	}
-	if cfg.WorkOSAPIKey == "" || cfg.WorkOSClientID == "" || cfg.WorkOSCookiePassword == "" {
-		return Config{}, errors.New("WORKOS_API_KEY, WORKOS_CLIENT_ID and WORKOS_COOKIE_PASSWORD are required")
+
+	devBypassAuth := strings.ToLower(strings.TrimSpace(getenv("DEV_BYPASS_AUTH"))) == "true"
+	devBypassAuthEmail := getenv("DEV_BYPASS_AUTH_EMAIL")
+	if devBypassAuthEmail == "" {
+		devBypassAuthEmail = "dev@example.com"
 	}
-	if cfg.InternalServiceToken == "" {
-		return Config{}, errors.New("INTERNAL_SERVICE_TOKEN is required")
+
+	return &Config{
+		Host:                 getenv("HOST"),
+		Port:                 port,
+		AppEnv:               getenv("APP_ENV"),
+		DatabaseURL:          getenv("DATABASE_URL"),
+		FrontendAppURL:       getenv("FRONTEND_APP_URL"),
+		WorkOSAPIKey:         getenv("WORKOS_API_KEY"),
+		WorkOSClientID:       getenv("WORKOS_CLIENT_ID"),
+		WorkOSCookiePassword: getenv("WORKOS_COOKIE_PASSWORD"),
+		WorkOSRedirectURI:    getenv("WORKOS_REDIRECT_URI"),
+		SecretKey:            getenv("SECRET_KEY"),
+		InternalServiceToken: getenv("INTERNAL_SERVICE_TOKEN"),
+		PythonAIBaseURL:      strings.TrimRight(getenv("PYTHON_AI_BASE_URL"), "/"),
+		AllowedOrigins:       allowedOrigins,
+		DevBypassAuth:        devBypassAuth,
+		DevBypassAuthEmail:   devBypassAuthEmail,
 	}
-	return cfg, nil
 }
 
-func getEnv(key, fallback string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
+// NewLogger builds the application logger. Call once at startup and inject the
+// returned value into the HTTP stack and services (do not store it on Config).
+func NewLogger(getenv func(string) string) *zap.Logger {
+	if getenv("APP_ENV") == "production" {
+		return zap.Must(zap.NewProduction())
 	}
-	return value
+	return zap.Must(zap.NewDevelopment())
 }
