@@ -32,3 +32,4 @@ RETURNING id;
 
 -- name: HasCompletedOnboarding :one
 SELECT EXISTS (SELECT user_id FROM user_details WHERE user_id=$1);
+
