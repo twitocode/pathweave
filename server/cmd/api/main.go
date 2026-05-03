@@ -17,6 +17,7 @@ import (
 
 	"github.com/twitocode/pathweave/go-api/internal/app"
 	"github.com/twitocode/pathweave/go-api/internal/config"
+	"github.com/twitocode/pathweave/go-api/internal/scraper"
 )
 
 func run(ctx context.Context, getenv func(string) string) error {
@@ -51,6 +52,10 @@ func run(ctx context.Context, getenv func(string) string) error {
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  30 * time.Second,
 	}
+
+	go func() {
+		fmt.Println(scraper.GetAllCourses()[0].Description);
+	}()
 
 	errCh := make(chan error, 1)
 	go func() {
