@@ -9,6 +9,8 @@ type OnboardingInfo struct {
 	//Screen 2 Your Life
 	//replace with mapbox specific stuff
 	//will calculate distance myself
+	WakeUpTime  string `json:"wake_up_time" validate:"required,datetime=15:04:05"`
+	Bedtime     string `json:"bedtime" validate:"required,datetime=15:04:05"`
 	JobInfo     string `json:"job_info" validate:"required,max=1000"`
 	HomeAddress string `json:"home_address" validate:"required"`
 	FuturePlans string `json:"future_plans" validate:"required,max=2000"`

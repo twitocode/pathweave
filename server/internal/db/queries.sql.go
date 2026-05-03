@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -29,6 +31,8 @@ func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
 
 const createUserDetails = `-- name: CreateUserDetails :one
 INSERT INTO user_details (
+    wake_up_time,
+    bedtime,
     user_id,
     program,
     year,
@@ -41,11 +45,13 @@ INSERT INTO user_details (
     avoided_courses,
     completed
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
 RETURNING id
 `
 
 type CreateUserDetailsParams struct {
+	WakeUpTime       pgtype.Time
+	Bedtime          pgtype.Time
 	UserID           int64
 	Program          string
 	Year             int16
@@ -60,6 +66,8 @@ type CreateUserDetailsParams struct {
 
 func (q *Queries) CreateUserDetails(ctx context.Context, arg CreateUserDetailsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, createUserDetails,
+		arg.WakeUpTime,
+		arg.Bedtime,
 		arg.UserID,
 		arg.Program,
 		arg.Year,

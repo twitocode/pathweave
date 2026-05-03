@@ -30,4 +30,6 @@ type UserDetail struct {
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 	Completed        pgtype.Bool
+	WakeUpTime       pgtype.Time
+	Bedtime          pgtype.Time
 }

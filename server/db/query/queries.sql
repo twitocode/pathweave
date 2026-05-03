@@ -12,6 +12,8 @@ RETURNING id, email, created_at, updated_at;
 
 -- name: CreateUserDetails :one
 INSERT INTO user_details (
+    wake_up_time,
+    bedtime,
     user_id,
     program,
     year,
@@ -24,7 +26,7 @@ INSERT INTO user_details (
     avoided_courses,
     completed
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
 RETURNING id;
 
 
