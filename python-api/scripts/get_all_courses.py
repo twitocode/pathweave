@@ -1,13 +1,34 @@
 import asyncio
 import json
+import os
 import re
+from typing import Any, Dict, List, Optional
+from glob import glob
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+from playwright.async_api import Browser, Page, async_playwright
 
 # Limit concurrent requests to avoid overwhelming the server
 MAX_CONCURRENT_REQUESTS = 10
+TOTAL_PAGES = 33
+HEADLESS = True
+PAGE_NAV_CONCURRENCY = 8
 
-async def fetch_and_parse_course(context, base_url, item, semaphore):
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
+
+def cleanup_worker_files(prefix: str) -> None:
+    pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
+    for path in glob(pattern):
+        try:
+            os.remove(path)
+        except Exception as e:
+            print(f"Warning: failed to remove worker file {path}: {e}")
+
+async def fetch_and_parse_course(
+    context, base_url: str, item: Dict[str, str], semaphore: asyncio.Semaphore
+) -> Optional[Dict[str, Any]]:
     async with semaphore:
         coid = item['coid']
         try:
@@ -111,82 +132,213 @@ async def fetch_and_parse_course(context, base_url, item, semaphore):
             print(f"\n[Error] Failed {item['text']}: {e}")
             return None
 
-async def scrape_courses():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(ignore_https_errors=True)
-        page = await context.new_page()
+def extract_course_code(course_text: str) -> str:
+    text = (course_text or "").strip()
+    match = re.match(r"^[A-Za-z]{2,}\s*\d+[A-Za-z0-9]*", text)
+    if match:
+        return match.group(0).upper().replace("  ", " ")
+    return text.split(" - ", 1)[0].upper() if text else ""
 
-        catoid = "58"
-        base_preview_url = f"https://academiccalendars.romcmaster.ca/ajax/preview_course.php?catoid={catoid}&show&coid="
-        url = f"https://academiccalendars.romcmaster.ca/content.php?catoid={catoid}&navoid=12627"
-        
-        print(f"Navigating to {url}")
-        await page.goto(url, wait_until="networkidle")
 
-        scraped_data = []
-        semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+def build_page_url(catoid: str, navoid: str, page_num: int) -> str:
+    return (
+        "https://academiccalendars.romcmaster.ca/content.php"
+        f"?catoid={catoid}"
+        f"&navoid={navoid}"
+        "&filter%5Bitem_type%5D=3"
+        "&filter%5Bonly_active%5D=1"
+        "&filter%5B3%5D=1"
+        f"&filter%5Bcpage%5D={page_num}"
+        "#acalog_template_course_filter"
+    )
 
-        # Limited to 2 pages for testing as requested
-        for page_num in range(1, 34):
-            print(f"\n--- Processing Page {page_num} ---")
-            
-            try:
-                await page.wait_for_selector("a[onclick^='showCourse']", timeout=15000)
-            except Exception:
-                print("No course links found.")
-                break
-            
-            course_links = await page.evaluate("""
-                () => Array.from(document.querySelectorAll("a[onclick^='showCourse']")).map(a => {
-                    const match = a.getAttribute('onclick').match(/showCourse\\('(\\d+)',\\s*'(\\d+)'/);
-                    return {
-                        text: a.innerText.trim(),
-                        coid: match ? match[2] : null
-                    };
-                }).filter(item => item.coid !== null)
-            """)
 
-            print(f"Found {len(course_links)} courses. Fetching in parallel...")
+async def read_course_links(page: Page) -> List[Dict[str, str]]:
+    return await page.evaluate(
+        """
+        () => Array.from(document.querySelectorAll("a[onclick^='showCourse']")).map(a => {
+            const match = a.getAttribute('onclick').match(/showCourse\\('(\\d+)',\\s*'(\\d+)'/);
+            return {
+                text: a.innerText.trim(),
+                coid: match ? match[2] : null
+            };
+        }).filter(item => item.coid !== null)
+        """
+    )
 
-            tasks = [fetch_and_parse_course(context, base_preview_url, item, semaphore) for item in course_links]
-            page_results = await asyncio.gather(*tasks)
-            valid_results = [r for r in page_results if r is not None]
-            scraped_data.extend(valid_results)
 
-            print(f"Page {page_num} finished. Scraped {len(valid_results)} courses. Total so far: {len(scraped_data)}")
+def parse_course_links_from_html(html: str) -> List[Dict[str, str]]:
+    soup = BeautifulSoup(html, "html.parser")
+    links: List[Dict[str, str]] = []
+    for a in soup.select("a[onclick^='showCourse']"):
+        onclick = a.get("onclick", "")
+        match = re.search(r"showCourse\('(\d+)',\s*'(\d+)'", onclick)
+        if not match:
+            continue
+        links.append({"text": a.get_text(strip=True), "coid": match.group(2)})
+    return links
 
-            if page_num < 2:
-                next_page = page_num + 1
-                print(f"Moving to page {next_page}...")
-                next_btn = page.locator(f"a:text-is('{next_page}')").first
-                if await next_btn.count() == 0:
-                    next_btn = page.locator(f"a[aria-label='Page {next_page}']").first
-                
-                if await next_btn.count() > 0:
-                    first_text = (await page.locator("a[onclick^='showCourse']").first.inner_text()).strip()
-                    await next_btn.click()
-                    
-                    for _ in range(50):
-                        await asyncio.sleep(0.2)
-                        try:
-                            new_text = (await page.locator("a[onclick^='showCourse']").first.inner_text()).strip()
-                            if new_text != first_text:
-                                break
-                        except:
-                            pass
-                else:
+
+async def read_course_links_via_request(context, target_url: str) -> List[Dict[str, str]]:
+    response = await context.request.get(target_url)
+    if response.status != 200:
+        return []
+    html = await response.text()
+    return parse_course_links_from_html(html)
+
+
+async def scrape_course_page(
+    browser: Browser,
+    worker_id: int,
+    page_num: int,
+    catoid: str,
+    navoid: str,
+    base_preview_url: str,
+    request_semaphore: asyncio.Semaphore,
+    page_nav_semaphore: asyncio.Semaphore,
+) -> List[Dict[str, Any]]:
+    context = await browser.new_context(ignore_https_errors=True)
+    page = await context.new_page()
+    partial_path = os.path.join(DATA_DIR, f"all_courses.worker_{worker_id}.json")
+
+    try:
+        target_url = build_page_url(catoid, navoid, page_num)
+        print(f"[worker {worker_id}] Navigating directly to page {page_num}...")
+        async with page_nav_semaphore:
+            await page.goto(target_url, wait_until="networkidle")
+
+            print(f"\n--- [worker {worker_id}] Processing Page {page_num} ---")
+            course_links: List[Dict[str, str]] = []
+            for attempt in range(1, 4):
+                try:
+                    await page.wait_for_selector(
+                        "a[onclick^='showCourse']", timeout=12000
+                    )
+                    course_links = await read_course_links(page)
+                except Exception:
+                    course_links = []
+
+                if course_links:
                     break
 
-        await browser.close()
-        
-        output_file = "data/all_courses.json"
-        with open(output_file, "w") as f:
-            json.dump(scraped_data, f, indent=2)
-            
-        print(f"\nSuccess! Scraped {len(scraped_data)} courses across 2 pages.")
-        print(f"Data saved to {output_file}")
-        return scraped_data
+                print(
+                    f"[worker {worker_id}] Page {page_num} had 0 DOM links "
+                    f"(attempt {attempt}/3). Retrying..."
+                )
+                await asyncio.sleep(1.0)
+                await page.reload(wait_until="networkidle")
+
+            if not course_links:
+                # Fallback to static HTML parse; this avoids intermittent DOM timing issues.
+                course_links = await read_course_links_via_request(context, target_url)
+                if course_links:
+                    print(
+                        f"[worker {worker_id}] Page {page_num} recovered via request fallback "
+                        f"({len(course_links)} links)."
+                    )
+                else:
+                    print(
+                        f"[worker {worker_id}] Page {page_num} still has 0 course links after retries."
+                    )
+
+        page_course_codes = [extract_course_code(item.get("text", "")) for item in course_links]
+        page_course_codes = [code for code in page_course_codes if code]
+        first_code = page_course_codes[0] if page_course_codes else "N/A"
+        last_code = page_course_codes[-1] if page_course_codes else "N/A"
+        print(
+            f"[worker {worker_id}] Page {page_num} course range: "
+            f"first={first_code}, last={last_code}, count={len(course_links)}"
+        )
+
+        tasks = [
+            fetch_and_parse_course(context, base_preview_url, item, request_semaphore)
+            for item in course_links
+        ]
+        page_results = await asyncio.gather(*tasks)
+        valid_results = [r for r in page_results if r is not None]
+        with open(partial_path, "w") as f:
+            json.dump(valid_results, f, indent=2)
+        print(f"[worker {worker_id}] Finished page {page_num} ({len(valid_results)} courses).")
+        return valid_results
+    except Exception as e:
+        print(f"[worker {worker_id}] Error on page {page_num}: {e}")
+        with open(partial_path, "w") as f:
+            json.dump([], f, indent=2)
+        return []
+    finally:
+        await context.close()
+
+
+async def scrape_courses():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    catoid = "58"
+    navoid = "12627"
+    base_preview_url = (
+        f"https://academiccalendars.romcmaster.ca/ajax/preview_course.php?catoid={catoid}&show&coid="
+    )
+    page_numbers = list(range(1, TOTAL_PAGES + 1))
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=HEADLESS)
+        request_semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+        page_nav_semaphore = asyncio.Semaphore(PAGE_NAV_CONCURRENCY)
+        print(
+            f"Starting page workers: {len(page_numbers)} "
+            f"(1 worker per page, global request concurrency={MAX_CONCURRENT_REQUESTS})"
+        )
+
+        try:
+            tasks = []
+            for worker_id, page_num in enumerate(page_numbers, start=1):
+                tasks.append(
+                    asyncio.create_task(
+                        scrape_course_page(
+                            browser,
+                            worker_id,
+                            page_num,
+                            catoid,
+                            navoid,
+                            base_preview_url,
+                            request_semaphore,
+                            page_nav_semaphore,
+                        )
+                    )
+                )
+                await asyncio.sleep(0.05)
+
+            worker_results = await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            await browser.close()
+
+    scraped_data: List[Dict[str, Any]] = []
+    for worker_id, result in enumerate(worker_results, start=1):
+        if isinstance(result, Exception):
+            print(f"[worker {worker_id}] Failed: {result}")
+            continue
+        scraped_data.extend(result)
+
+    deduped_by_name: Dict[str, Dict[str, Any]] = {}
+    duplicate_count = 0
+    for item in scraped_data:
+        key = (item.get("course_name") or "").strip()
+        if key in deduped_by_name:
+            duplicate_count += 1
+            continue
+        deduped_by_name[key] = item
+
+    final_results = list(deduped_by_name.values())
+    output_file = os.path.join(DATA_DIR, "all_courses.json")
+    with open(output_file, "w") as f:
+        json.dump(final_results, f, indent=2)
+    cleanup_worker_files("all_courses")
+
+    print(
+        f"\nSuccess! Scraped {len(final_results)} unique courses "
+        f"(filtered {duplicate_count} duplicates)."
+    )
+    print(f"Data saved to {output_file}")
+    return final_results
 
 if __name__ == "__main__":
     asyncio.run(scrape_courses())

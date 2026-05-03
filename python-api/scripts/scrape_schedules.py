@@ -3,21 +3,54 @@ import os
 import json
 import re
 import time
+from glob import glob
 from typing import List, Optional, Dict, Any, Tuple, Union
 from dotenv import load_dotenv
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-load_dotenv(os.path.join(BASE_DIR, ".env"))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
+
+def cleanup_worker_files(prefix: str) -> None:
+    pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
+    for path in glob(pattern):
+        try:
+            os.remove(path)
+        except Exception as e:
+            print(f"Warning: failed to remove worker file {path}: {e}")
 
 MOSAIC_USERNAME = os.getenv("MOSAIC_USERNAME")
 MOSAIC_PASSWORD = os.getenv("MOSAIC_PASSWORD")
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 
-COURSE_LIMIT: Optional[int] = 2  # None => scrape all courses
-WORKER_COUNT = 1
+
+def _env_truthy(value: Optional[str]) -> bool:
+    if value is None or not value.strip():
+        return False
+    return value.strip().lower() in ("1", "true", "yes", "debug", "on")
+
+
+def format_wall_time(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    m, s = divmod(int(round(seconds)), 60)
+    if m < 60:
+        return f"{m}m {s}s"
+    h, m = divmod(m, 60)
+    return f"{h}h {m}m {s}s"
+
+
+# Verbose timestamps + cleanup/combo traces (matches previous console behavior).
+SCRAPE_SCHEDULE_DEBUG = _env_truthy(os.getenv("SCRAPE_SCHEDULE_DEBUG")) or _env_truthy(
+    os.getenv("DEBUG")
+)
+
+COURSE_LIMIT: Optional[int] = None  # None => scrape all courses
+WORKER_COUNT = 30
 TERM_NAME = "2026 Spring/Summer"
 
 
@@ -26,23 +59,25 @@ class ActionTimer:
         self.start = time.time()
 
     def log(self, message: str) -> None:
+        if not SCRAPE_SCHEDULE_DEBUG:
+            return
         elapsed = time.time() - self.start
-        print(f"[{elapsed:6.2f}s] {message}")
+        print(f"[{elapsed:6.2f}s  ] {message}")
         self.start = time.time()
 
 
 timer = ActionTimer()
 
-UI_SETTLE_SECONDS = 1.0
-COURSE_COOLDOWN_SECONDS = 3.0
-RESULT_NAV_COOLDOWN_SECONDS = 1.0
+UI_SETTLE_SECONDS = 1.0 - 0.65
+COURSE_COOLDOWN_SECONDS = 3.0 - 2
+RESULT_NAV_COOLDOWN_SECONDS = 1.0 - 0.65
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 DAY_PATTERN = r"(Mon|Tue|Wed|Thu|Fri|Sat|Sun)"
 TIME_RANGE_PATTERN = r"(\d{1,2}:\d{2}\s+[AP]M)\s+to\s+(\d{1,2}:\d{2}\s+[AP]M)"
 
 
-def normalize_course_code(value: Optional[str]) -> str:
+def normalize_course_code(value: Optional[str]) -> str :
     return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
 
 
@@ -112,35 +147,57 @@ async def wait_for_selected_course_labels(
     return await selected_course_labels(page)
 
 
-async def has_term_availability_message(page: Page, course_code: str) -> bool:
+def normalize_term_label(term_text: str) -> str:
+    """
+    Convert labels like "2025 Fall" or "Fall 2025" into "Fall 2025".
+    """
+    cleaned = re.sub(r"\s+", " ", (term_text or "").strip())
+    match_year_first = re.match(r"^(\d{4})\s+([A-Za-z/]+)$", cleaned)
+    if match_year_first:
+        return f"{match_year_first.group(2)} {match_year_first.group(1)}"
+    return cleaned
+
+
+async def get_other_term_availability(page: Page, course_code: str) -> Optional[str]:
     """
     Detect MyTimetable message like:
-      "<COURSE> is only available in other terms..."
-    Keep this conservative so we don't skip most courses.
+      "<COURSE> is only available in the term 2025 Fall."
+    Returns the normalized term label (e.g. "Fall 2025") when found.
     """
     normalized_target = normalize_course_code(course_code)
     if not normalized_target:
-        return False
+        return None
 
     body_text: str = await page.evaluate("() => document.body.innerText || ''")
     if not body_text:
-        return False
+        return None
 
-    body_upper = body_text.upper()
-    phrase = "IS ONLY AVAILABLE"
-    phrase_idx = body_upper.find(phrase)
-    if phrase_idx == -1:
-        # Some UIs might omit spacing.
-        normalized_body = normalize_course_code(body_upper)
-        norm_phrase_idx = normalized_body.find("ISONLYAVAILABLE")
-        if norm_phrase_idx == -1:
-            return False
-        window = normalized_body[max(0, norm_phrase_idx - 80) : norm_phrase_idx + 220]
-        return window.find(normalized_target) != -1
+    # Look for explicit "only available ... term X" lines and ensure they refer to this course.
+    for raw_line in body_text.splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        if not line:
+            continue
+        if "is only available" not in line.lower():
+            continue
+        if normalized_target not in normalize_course_code(line):
+            continue
 
-    window_raw = body_upper[phrase_idx : phrase_idx + 800]
-    window_norm = normalize_course_code(window_raw)
-    return window_norm.find(normalized_target) != -1
+        term_match = re.search(r"\bterm\s+([A-Za-z0-9/ ]+?)(?:[.!]|$)", line, flags=re.IGNORECASE)
+        if term_match:
+            return normalize_term_label(term_match.group(1))
+
+        # Fallback when "term" isn't present but an academic term label is.
+        fallback_match = re.search(
+            r"\b((?:20\d{2}\s+[A-Za-z/]+)|(?:[A-Za-z/]+\s+20\d{2}))\b",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if fallback_match:
+            return normalize_term_label(fallback_match.group(1))
+
+        return "Unknown"
+
+    return None
 
 
 async def _read_result_index(page: Page) -> Optional[int]:
@@ -203,110 +260,25 @@ async def rewind_to_first_result(page: Page, max_steps: int = 200) -> bool:
 
 
 async def remove_selected_course(page: Page, course_code: Optional[str] = None) -> None:
-    """Best-effort cleanup: rewind to result 1, then unselect selected course checkbox."""
     timer.log("Attempting course cleanup...")
 
-    # Ensure we are at combo/result 1 before unselecting the course.
     try:
         await rewind_to_first_result(page)
     except Exception:
-        # Don't let cleanup failures kill the worker.
         pass
 
-    result: Dict[str, Any] = await page.evaluate(
-        """(courseCode) => {
-            const boxes = Array.from(
-                document.querySelectorAll("input.ignore_check[id^='cnf_toggle']")
-            );
-            const normalizedCode = courseCode ? courseCode.toUpperCase() : null;
-            const normalize = (value) => (value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-            const candidates = normalizedCode
-                ? boxes.filter((box) =>
-                    normalize(box.getAttribute("aria-label")).startsWith(normalize(normalizedCode))
-                  )
-                : boxes.filter((box) => box.checked && normalize(box.getAttribute("aria-label")));
+    trash_button = page.locator(".cnf_trash_button:visible").first
 
-            const box = candidates.find((candidate) => candidate.checked) || candidates[0];
-            if (!box) {
-                return { found: false, checked: false };
-            }
-
-            box.scrollIntoView({ block: "center", inline: "center" });
-
-            const target = box.closest("label") || box;
-            target.click();
-
-            return {
-                found: true,
-                checked: box.checked,
-                id: box.id,
-                label: box.getAttribute("aria-label") || ""
-            };
-        }""",
-        course_code,
-    )
-
-    result: Dict[str, Any] = await page.evaluate(
-        """(courseCode) => {
-            const deleteButton = document.querySelector(".cbox-option")
-            deleteButton.click()
-            
-                  var element =  document.querySelector('[class*="requirementDiv]');
-                  
-                            
-            if (typeof(element) == 'undefined' || element == null)
-            {
-                return {
-                    exists: false
-                }
-            };
-            
-            return {
-                exists: true
-            }
-        }""",
-        course_code,
-    )
-    if not result.get("found"):
-        timer.log("No selected course checkbox found to uncheck.")
+    if await trash_button.count() == 0:
+        timer.log("No course button found to remove (already clean)")
         return
+    await trash_button.scroll_into_view_if_needed()
+    await trash_button.dispatch_event("click", {"bubbles": True})
 
-    if result.get("checked"):
-        checkbox_id = result.get("id")
-        checkbox = page.locator(f"input.ignore_check[id='{checkbox_id}']").first
-        try:
-            await checkbox.click(force=True)
-        except Exception:
-            pass
+    timer.log(f"Removed Course: {course_code} from Results")
 
-        for _ in range(20):
-            await asyncio.sleep(0.1)
-            if await checkbox.count() > 0 and not await checkbox.is_checked():
-                timer.log(f"Unchecked selected course checkbox: {result.get('label')}")
-                break
-        else:
-            timer.log(
-                f"Warning: checkbox stayed checked after click: {result.get('label')}"
-            )
-            return
-    else:
-        timer.log(f"Unchecked selected course checkbox: {result.get('label')}")
-
-    # Wait for UI to settle after unselecting.
     await asyncio.sleep(0.5)
-
-    # If a return button appears, ensure we are in search mode for the next course.
-    try:
-        return_btn = page.locator("input.button_return").first
-        if await return_btn.count() > 0 and await return_btn.is_visible():
-            await return_btn.click()
-            timer.log("Returned to search view")
-            await asyncio.sleep(UI_SETTLE_SECONDS)
-    except Exception:
-        pass
-
     timer.log("Cleanup complete")
-
 
 def parse_section_details(raw_text: str) -> Dict[str, str]:
     # Instruction Mode
@@ -433,14 +405,21 @@ async def scrape_course_combinations(
                 continue
 
             count = await suggestion_items.count()
+            exact_match = None
+            prefix_match = None
             for i in range(count):
                 s = suggestion_items.nth(i)
-                if await s.is_visible():
-                    txt = (await s.inner_text()).upper().replace("\n", " ")
-                    if normalize_course_code(txt).startswith(normalized_target_code):
-                        target = s
-                        break
+                if not await s.is_visible():
+                    continue
+                txt = (await s.inner_text()).upper().replace("\n", " ")
+                norm = normalize_course_code(txt)
+                if norm == normalized_target_code:
+                    exact_match = s
+                    break
+                if prefix_match is None and norm.startswith(normalized_target_code):
+                    prefix_match = s
 
+            target = exact_match or prefix_match
             if target:
                 break
             await asyncio.sleep(0.25)
@@ -456,10 +435,15 @@ async def scrape_course_combinations(
         timer.log("Selected suggestion")
         await asyncio.sleep(COURSE_COOLDOWN_SECONDS)
 
-        if await has_term_availability_message(page, course_code):
-            timer.log(f"{course_code} is only available in other terms; skipping.")
+        other_term = await get_other_term_availability(page, course_code)
+        if other_term:
+            timer.log(f"{course_code} is only available in {other_term}; recording term.")
             course_selected = False
-            return None
+            return {
+                "course_code": course_code,
+                "term": other_term,
+                "combinations": [],
+            }
 
         selected_labels = await wait_for_selected_course_labels(page, course_code)
         if not any(
@@ -483,10 +467,15 @@ async def scrape_course_combinations(
         except Exception:
             pass
 
-        if await has_term_availability_message(page, course_code):
-            timer.log(f"{course_code} is only available in other terms; skipping.")
+        other_term = await get_other_term_availability(page, course_code)
+        if other_term:
+            timer.log(f"{course_code} is only available in {other_term}; recording term.")
             course_selected = False
-            return None
+            return {
+                "course_code": course_code,
+                "term": other_term,
+                "combinations": [],
+            }
 
         # 3. Wait for Results and determining total combinations
         total_span = page.locator(".results-nav .results-total-schedules").first
@@ -499,7 +488,7 @@ async def scrape_course_combinations(
             timer.log(f"Could not determine total combinations: {e}")
             return None
 
-        course_data = {"course_code": course_code, "combinations": []}
+        course_data = {"course_code": course_code, "term": TERM_NAME, "combinations": []}
 
         # 4. Cycle and Extract
         next_btn = page.locator(".results-action-next").first
@@ -556,17 +545,22 @@ async def scrape_course_combinations(
                         "sections": section_blocks,
                     }
                 )
-                print(f"  Captured combo {i}/{total_combos}", end="\r")
+                if SCRAPE_SCHEDULE_DEBUG:
+                    print(f"  Captured combo {i}/{total_combos}", end="\r")
             except Exception as e:
-                print(f"  Failed combo {i}: {e}")
+                if SCRAPE_SCHEDULE_DEBUG:
+                    print(f"\n  Failed combo {i}: {e}")
+                else:
+                    print(f"[course {course_code}] combo {i}/{total_combos}: {e}")
 
             if i < total_combos:
                 await next_btn.click()
                 await asyncio.sleep(RESULT_NAV_COOLDOWN_SECONDS)
 
-        print(
-            f"\nCaptured {len(course_data['combinations'])} combinations for {course_code}."
-        )
+        if SCRAPE_SCHEDULE_DEBUG:
+            print(
+                f"\nCaptured {len(course_data['combinations'])} combinations for {course_code}."
+            )
         return course_data
     finally:
         if course_selected:
@@ -621,8 +615,13 @@ async def scrape_course_chunk(
                     results.append(result)
                     with open(partial_path, "w") as f:
                         json.dump(results, f, indent=2)
+                    if not SCRAPE_SCHEDULE_DEBUG:
+                        print(f"[worker {worker_id}] {code}")
             except Exception as e:
-                timer.log(f"[worker {worker_id}] Error scraping {code}: {e}")
+                if SCRAPE_SCHEDULE_DEBUG:
+                    timer.log(f"[worker {worker_id}] Error scraping {code}: {e}")
+                else:
+                    print(f"[worker {worker_id}] Error scraping {code}: {e}")
             finally:
                 timer.log(
                     f"[worker {worker_id}] Cooling down before next course ({COURSE_COOLDOWN_SECONDS}s)..."
@@ -640,42 +639,70 @@ async def scrape_course_chunk(
 
 
 async def run() -> None:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    course_codes = load_course_codes(limit=COURSE_LIMIT)
-    chunks = [chunk for chunk in chunk_list(course_codes, WORKER_COUNT) if chunk]
-    timer.log(f"Loaded {len(course_codes)} courses; starting {len(chunks)} workers.")
+    run_started = time.time()
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        course_codes = load_course_codes(limit=COURSE_LIMIT)
+        # course_codes = ["CHEM 1AA3"]
+        chunks = [chunk for chunk in chunk_list(course_codes, WORKER_COUNT) if chunk]
+        timer.log(f"Loaded {len(course_codes)} courses; starting {len(chunks)} workers.")
+        if not SCRAPE_SCHEDULE_DEBUG:
+            print(
+                f"Scrape schedules: {len(course_codes)} courses, {len(chunks)} workers "
+                f"(set SCRAPE_SCHEDULE_DEBUG=1 or DEBUG=1 for full logs)"
+            )
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=HEADLESS)
-        try:
-            tasks = []
-            for worker_id, chunk in enumerate(chunks, start=1):
-                tasks.append(
-                    asyncio.create_task(scrape_course_chunk(browser, worker_id, chunk))
-                )
-                # Small stagger avoids hammering Mosaic login at the exact same millisecond.
-                await asyncio.sleep(1)
-
-            worker_results = await asyncio.gather(*tasks, return_exceptions=True)
-            all_results: List[Dict[str, Any]] = []
-            for worker_id, chunk_results in enumerate(worker_results, start=1):
-                if isinstance(chunk_results, Exception):
-                    timer.log(f"[worker {worker_id}] Failed: {chunk_results}")
-                    continue
-                if not isinstance(chunk_results, list):
-                    timer.log(
-                        f"[worker {worker_id}] Unexpected worker result type: {type(chunk_results)}"
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=HEADLESS)
+            try:
+                tasks = []
+                for worker_id, chunk in enumerate(chunks, start=1):
+                    tasks.append(
+                        asyncio.create_task(
+                            scrape_course_chunk(browser, worker_id, chunk)
+                        )
                     )
-                    continue
-                all_results.extend(chunk_results)
+                    # Small stagger avoids hammering Mosaic login at the exact same millisecond.
+                    await asyncio.sleep(1)
 
-            output_path = os.path.join(DATA_DIR, "all_possible_schedules.json")
-            with open(output_path, "w") as f:
-                json.dump(all_results, f, indent=2)
+                worker_results = await asyncio.gather(*tasks, return_exceptions=True)
+                all_results: List[Dict[str, Any]] = []
+                for worker_id, chunk_results in enumerate(worker_results, start=1):
+                    if isinstance(chunk_results, Exception):
+                        if SCRAPE_SCHEDULE_DEBUG:
+                            timer.log(f"[worker {worker_id}] Failed: {chunk_results}")
+                        else:
+                            print(f"[worker {worker_id}] Failed: {chunk_results}")
+                        continue
+                    if not isinstance(chunk_results, list):
+                        if SCRAPE_SCHEDULE_DEBUG:
+                            timer.log(
+                                f"[worker {worker_id}] Unexpected worker result type: {type(chunk_results)}"
+                            )
+                        else:
+                            print(
+                                f"[worker {worker_id}] Unexpected worker result type: {type(chunk_results)}"
+                            )
+                        continue
+                    all_results.extend(chunk_results)
 
-            timer.log(f"All tasks done. Saved {len(all_results)} courses.")
-        finally:
-            await browser.close()
+                output_path = os.path.join(DATA_DIR, "all_possible_schedules.json")
+                with open(output_path, "w") as f:
+                    json.dump(all_results, f, indent=2)
+                cleanup_worker_files("all_possible_schedules")
+
+                timer.log(f"All tasks done. Saved {len(all_results)} courses.")
+                if not SCRAPE_SCHEDULE_DEBUG:
+                    print(f"Done. Saved {len(all_results)} courses to {output_path}")
+            finally:
+                await browser.close()
+    finally:
+        elapsed = time.time() - run_started
+        total_msg = f"Total time: {format_wall_time(elapsed)}"
+        if SCRAPE_SCHEDULE_DEBUG:
+            timer.log(total_msg)
+        else:
+            print(total_msg)
 
 
 if __name__ == "__main__":
