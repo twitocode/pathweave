@@ -21,6 +21,24 @@ def parse_units(units_str):
         return int(match.group(1))
     return 0
 
+
+def parse_optional_int(value):
+    if value is None:
+        return None
+    match = re.search(r"(\d+)", str(value))
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def extract_course_code(requirement_text):
+    if not requirement_text:
+        return None
+    match = re.search(r"\b([A-Z]{2,10}\s\d[A-Z0-9]{2,4})\b", requirement_text)
+    if match:
+        return match.group(1)
+    return None
+
 def seed():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -130,13 +148,79 @@ def seed():
         for prog in all_programs:
             cur.execute("INSERT INTO program (name) VALUES (%s) RETURNING id", (prog["program_name"],))
             program_id = cur.fetchone()[0]
-            
-            for req in prog.get("requirements", []):
-                # Requirement format: "CODE - NAME"
-                match = re.match(r'^([A-Z]+ \d+[A-Z\d]*)\s*-\s*(.*)$', req)
-                if match:
-                    req_code = match.group(1).strip()
-                    if req_code in course_map:
+
+            grouped_requirements = prog.get("requirements_by_level", [])
+            for level_index, level_data in enumerate(grouped_requirements):
+                level_label = level_data.get("level", "")
+                level_total_units = parse_optional_int(level_data.get("total_units"))
+
+                for group_index, group_data in enumerate(level_data.get("unit_groups", [])):
+                    group_units = parse_optional_int(group_data.get("units"))
+                    cur.execute(
+                        """
+                        INSERT INTO program_requirement_group (
+                            program_id,
+                            level_label,
+                            level_total_units,
+                            group_units,
+                            sort_order
+                        )
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            program_id,
+                            level_label,
+                            level_total_units,
+                            group_units,
+                            (level_index * 100) + group_index,
+                        ),
+                    )
+                    requirement_group_id = cur.fetchone()[0]
+
+                    for item_index, item in enumerate(group_data.get("requirements", [])):
+                        requirement_text = (item.get("text") or "").strip()
+                        if not requirement_text:
+                            continue
+
+                        course_code = item.get("course_code") or extract_course_code(requirement_text)
+                        course_id = course_map.get(course_code) if course_code else None
+                        is_course = bool(course_code)
+                        is_admission_placeholder = requirement_text == "See Admission Requirements"
+
+                        if not is_course and not is_admission_placeholder:
+                            continue
+
+                        cur.execute(
+                            """
+                            INSERT INTO program_requirement_item (
+                                requirement_group_id,
+                                requirement_text,
+                                course_code,
+                                course_id,
+                                is_course,
+                                sort_order
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                requirement_group_id,
+                                requirement_text,
+                                course_code,
+                                course_id,
+                                is_course,
+                                item_index,
+                            ),
+                        )
+
+                        if course_id is not None:
+                            program_courses.append((program_id, course_id))
+
+            # Backward-compatible fallback for older scrape output
+            if not grouped_requirements:
+                for req in prog.get("requirements", []):
+                    req_code = extract_course_code(req)
+                    if req_code and req_code in course_map:
                         program_courses.append((program_id, course_map[req_code]))
 
         execute_values(cur, """
