@@ -35,6 +35,25 @@ type ProgramCourse struct {
 	CourseID  int64
 }
 
+type ProgramRequirementGroup struct {
+	ID              int64
+	ProgramID       int64
+	LevelLabel      string
+	LevelTotalUnits pgtype.Int4
+	GroupUnits      pgtype.Int4
+	SortOrder       int32
+}
+
+type ProgramRequirementItem struct {
+	ID                 int64
+	RequirementGroupID int64
+	RequirementText    string
+	CourseCode         pgtype.Text
+	CourseID           pgtype.Int8
+	IsCourse           bool
+	SortOrder          int32
+}
+
 type ScheduleCombo struct {
 	ID             int32
 	ComboIndex     int32
