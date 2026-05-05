@@ -5,31 +5,96 @@
 package db
 
 import (
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Course struct {
+	ID            int64
+	Code          string
+	Name          string
+	Description   string
+	Restrictions  string
+	Prerequisites []string
+	Units         int32
+	Term          string
+}
+
+type CourseTeacher struct {
+	CourseID  int64
+	TeacherID int32
+}
+
+type Program struct {
+	ID   int64
+	Name string
+}
+
+type ProgramCourse struct {
+	ProgramID int64
+	CourseID  int64
+}
+
+type ScheduleCombo struct {
+	ID             int32
+	ComboIndex     int32
+	Day            string
+	StartTime      pgtype.Time
+	EndTime        pgtype.Time
+	Type           string
+	Section        string
+	InstructorName string
+	Building       string
+	RoomNumber     string
+	Mode           string
+	IsInPerson     bool
+	CourseID       int64
+}
+
+type Teacher struct {
+	ID            int32
+	Name          string
+	AvgRating     pgtype.Numeric
+	AvgDifficulty pgtype.Numeric
+	Department    string
+	RmpID         string
+	NumRatings    int32
+}
+
+type TeacherProgram struct {
+	TeacherID int32
+	ProgramID int64
+}
+
 type User struct {
-	ID        int64
+	ID        uuid.UUID
 	Email     string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
 
 type UserDetail struct {
-	ID               int64
-	UserID           int64
-	Program          string
+	UserID           uuid.UUID
 	Year             int16
-	CompletedCourses []string
 	JobInfo          string
 	HomeAddress      string
 	FuturePlans      string
 	ProfessorQuality int16
 	TeachingStyle    int16
-	AvoidedCourses   []string
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 	Completed        pgtype.Bool
 	WakeUpTime       pgtype.Time
 	Bedtime          pgtype.Time
+	ProgramID        pgtype.Int8
+}
+
+type UserDetailAvoidedCourse struct {
+	UserID   uuid.UUID
+	CourseID int64
+}
+
+type UserDetailCompletedCourse struct {
+	UserID   uuid.UUID
+	CourseID int64
 }

@@ -1,4 +1,4 @@
 {
   "venv": ".venv",
-  "extraPaths": ["server/src"]
+  "extraPaths": ["scraping-service"]
 }

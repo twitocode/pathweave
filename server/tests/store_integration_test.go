@@ -26,7 +26,7 @@ func TestGetOrCreateUserByEmail_Integration(t *testing.T) {
 
 	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS users (
-			id BIGSERIAL PRIMARY KEY,
+			id UUID PRIMARY KEY DEFAULT uuidv7(),
 			email TEXT NOT NULL UNIQUE,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

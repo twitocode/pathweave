@@ -8,8 +8,41 @@ package db
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const addUserAvoidedCourse = `-- name: AddUserAvoidedCourse :exec
+INSERT INTO user_detail_avoided_courses (user_id, course_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddUserAvoidedCourseParams struct {
+	UserID   uuid.UUID
+	CourseID int64
+}
+
+func (q *Queries) AddUserAvoidedCourse(ctx context.Context, arg AddUserAvoidedCourseParams) error {
+	_, err := q.db.Exec(ctx, addUserAvoidedCourse, arg.UserID, arg.CourseID)
+	return err
+}
+
+const addUserCompletedCourse = `-- name: AddUserCompletedCourse :exec
+INSERT INTO user_detail_completed_courses (user_id, course_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddUserCompletedCourseParams struct {
+	UserID   uuid.UUID
+	CourseID int64
+}
+
+func (q *Queries) AddUserCompletedCourse(ctx context.Context, arg AddUserCompletedCourseParams) error {
+	_, err := q.db.Exec(ctx, addUserCompletedCourse, arg.UserID, arg.CourseID)
+	return err
+}
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email)
@@ -34,51 +67,73 @@ INSERT INTO user_details (
     wake_up_time,
     bedtime,
     user_id,
-    program,
+    program_id,
     year,
-    completed_courses,
     job_info,
     home_address,
     future_plans,
     professor_quality,
     teaching_style,
-    avoided_courses,
     completed
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true)
-RETURNING id
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+RETURNING user_id
 `
 
 type CreateUserDetailsParams struct {
 	WakeUpTime       pgtype.Time
 	Bedtime          pgtype.Time
-	UserID           int64
-	Program          string
+	UserID           uuid.UUID
+	ProgramID        pgtype.Int8
 	Year             int16
-	CompletedCourses []string
 	JobInfo          string
 	HomeAddress      string
 	FuturePlans      string
 	ProfessorQuality int16
 	TeachingStyle    int16
-	AvoidedCourses   []string
 }
 
-func (q *Queries) CreateUserDetails(ctx context.Context, arg CreateUserDetailsParams) (int64, error) {
+func (q *Queries) CreateUserDetails(ctx context.Context, arg CreateUserDetailsParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createUserDetails,
 		arg.WakeUpTime,
 		arg.Bedtime,
 		arg.UserID,
-		arg.Program,
+		arg.ProgramID,
 		arg.Year,
-		arg.CompletedCourses,
 		arg.JobInfo,
 		arg.HomeAddress,
 		arg.FuturePlans,
 		arg.ProfessorQuality,
 		arg.TeachingStyle,
-		arg.AvoidedCourses,
 	)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
+const getCourseIDByCode = `-- name: GetCourseIDByCode :one
+SELECT id
+FROM course
+WHERE code = $1
+LIMIT 1
+`
+
+func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, error) {
+	row := q.db.QueryRow(ctx, getCourseIDByCode, code)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getProgramIDByName = `-- name: GetProgramIDByName :one
+SELECT id
+FROM program
+WHERE name = $1
+LIMIT 1
+`
+
+func (q *Queries) GetProgramIDByName(ctx context.Context, name string) (int64, error) {
+	row := q.db.QueryRow(ctx, getProgramIDByName, name)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -104,12 +159,12 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const hasCompletedOnboarding = `-- name: HasCompletedOnboarding :one
-SELECT EXISTS (SELECT user_id FROM user_details WHERE user_id=$1)
+SELECT COALESCE((SELECT completed FROM user_details WHERE user_id = $1), false)::boolean
 `
 
-func (q *Queries) HasCompletedOnboarding(ctx context.Context, userID int64) (bool, error) {
+func (q *Queries) HasCompletedOnboarding(ctx context.Context, userID uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, hasCompletedOnboarding, userID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }

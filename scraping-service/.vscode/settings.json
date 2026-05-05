@@ -1,4 +1,4 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python3",
+  "python.defaultInterpreterPath": "/Users/twito/Documents/Code/projects/PathWeave/scraping-service/.venv/bin/python3",
   "python.analysis.extraPaths": ["${workspaceFolder}/src"]
 }

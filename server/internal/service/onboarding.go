@@ -36,52 +36,76 @@ func (os *OnboardingService) Handle(ctx context.Context, user *db.User, onboardi
 		return fmt.Errorf("onboarding is already completed")
 	}
 
-	bedtime, wakeUpTime := parseTime(onboardingInfo)
+	bedtime := parseTime(onboardingInfo.Bedtime)
+	wakeUpTime := parseTime(onboardingInfo.WakeUpTime)
+
+	programID, err := os.db.GetProgramIDByName(ctx, onboardingInfo.Program)
+	if err != nil {
+		return fmt.Errorf("failed to find program %q: %w", onboardingInfo.Program, err)
+	}
 
 	_, err = os.db.CreateUserDetails(ctx, db.CreateUserDetailsParams{
-		UserID:           user.ID,
-		Program:          onboardingInfo.Program,
+		UserID: user.ID,
+		ProgramID: pgtype.Int8{
+			Int64: programID,
+			Valid: true,
+		},
 		Year:             int16(onboardingInfo.Year),
-		CompletedCourses: onboardingInfo.CompletedCourses,
-		AvoidedCourses:   onboardingInfo.AvoidedCourses,
 		JobInfo:          onboardingInfo.JobInfo,
 		HomeAddress:      onboardingInfo.HomeAddress,
 		FuturePlans:      onboardingInfo.FuturePlans,
 		ProfessorQuality: int16(onboardingInfo.ProfessorQuality),
 		TeachingStyle:    int16(onboardingInfo.TeachingStyle),
 		Bedtime:          bedtime,
-    WakeUpTime: wakeUpTime,
+		WakeUpTime:       wakeUpTime,
 	})
 
 	if err != nil {
 		return err
 	}
 
+	for _, completedCourseCode := range onboardingInfo.CompletedCourses {
+		courseID, err := os.db.GetCourseIDByCode(ctx, completedCourseCode)
+		if err != nil {
+			return fmt.Errorf("failed to find completed course %q: %w", completedCourseCode, err)
+		}
+
+		if err := os.db.AddUserCompletedCourse(ctx, db.AddUserCompletedCourseParams{
+			UserID:   user.ID,
+			CourseID: courseID,
+		}); err != nil {
+			return err
+		}
+	}
+
+	for _, avoidedCourseCode := range onboardingInfo.AvoidedCourses {
+		courseID, err := os.db.GetCourseIDByCode(ctx, avoidedCourseCode)
+		if err != nil {
+			return fmt.Errorf("failed to find avoided course %q: %w", avoidedCourseCode, err)
+		}
+
+		if err := os.db.AddUserAvoidedCourse(ctx, db.AddUserAvoidedCourseParams{
+			UserID:   user.ID,
+			CourseID: courseID,
+		}); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-func parseTime(onboardingInfo common.OnboardingInfo) (pgtype.Time, pgtype.Time) {
-	parsedBedtime, err := time.Parse("15:04:05", onboardingInfo.Bedtime)
+func parseTime(input string) pgtype.Time {
+	parsedTime, err := time.Parse("15:04:05", input)
 	if err != nil {
 		panic(err)
 	}
 
-	parsedWakeUpTime, err := time.Parse("15:04:05", onboardingInfo.WakeUpTime)
+	wakeUpTimeMicroseconds := int64(parsedTime.Hour()*3600+parsedTime.Minute()*60+parsedTime.Second()) * 1000000
 
-	if err != nil {
-		panic(err)
-	}
-
-	bedtimeMicroseconds := int64(parsedBedtime.Hour()*3600+parsedBedtime.Minute()*60+parsedBedtime.Second()) * 1000000
-	wakeUpTimeMicroseconds := int64(parsedWakeUpTime.Hour()*3600+parsedWakeUpTime.Minute()*60+parsedWakeUpTime.Second()) * 1000000
-
-	bedtime := pgtype.Time{
-		Microseconds: bedtimeMicroseconds,
-		Valid:        true,
-	}
-	wakeUpTime := pgtype.Time{
+	time := pgtype.Time{
 		Microseconds: wakeUpTimeMicroseconds,
 		Valid:        true,
 	}
-	return bedtime, wakeUpTime
+	return time
 }
