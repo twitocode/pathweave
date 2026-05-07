@@ -16,7 +16,10 @@ sys.path.insert(0, str(SCRIPT_DIR))
 sys.modules.setdefault("psycopg2", types.SimpleNamespace(connect=lambda *_args, **_kwargs: None))
 sys.modules.setdefault(
     "psycopg2.extras",
-    types.SimpleNamespace(execute_values=lambda *_args, **_kwargs: None),
+    types.SimpleNamespace(
+        execute_values=lambda *_args, **_kwargs: None,
+        Json=lambda value: value,
+    ),
 )
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda *_args, **_kwargs: None))
 
@@ -142,27 +145,21 @@ class BuildScheduleValuesTests(unittest.TestCase):
         self.assertEqual(rows[1][9], "TBD")
 
 
-class BuildFallbackRequirementGroupsTests(unittest.TestCase):
-    def test_groups_flat_requirements_when_structured_levels_are_missing(self):
+class RequirementNormalizationTests(unittest.TestCase):
+    def test_normalizes_flat_requirements_to_unique_course_codes(self):
         requirements = [
             "ECON 2Z03 - Intermediate Microeconomics I",
             "ECON 2ZZ3 - Intermediate Microeconomics II",
+            "ECON 2Z03 - Intermediate Microeconomics I",
+            "electives",
         ]
-        course_map = {"ECON 2Z03": 10}
+        normalized = SEED.normalize_program_requirement_codes(requirements)
+        self.assertEqual(normalized, ["ECON 2Z03", "ECON 2ZZ3"])
 
-        groups = SEED.build_fallback_requirement_groups(requirements, course_map)
-
-        self.assertEqual(len(groups), 1)
-        self.assertEqual(groups[0]["level_label"], "Program")
-        self.assertIsNone(groups[0]["level_total_units"])
-        self.assertIsNone(groups[0]["group_units"])
-        self.assertFalse(groups[0]["choose_one"])
-        self.assertEqual(groups[0]["items"][0]["requirement_text"], requirements[0])
-        self.assertEqual(groups[0]["items"][0]["course_code"], "ECON 2Z03")
-        self.assertEqual(groups[0]["items"][0]["course_id"], 10)
-        self.assertTrue(groups[0]["items"][0]["is_course"])
-        self.assertEqual(groups[0]["items"][1]["course_code"], "ECON 2ZZ3")
-        self.assertIsNone(groups[0]["items"][1]["course_id"])
+    def test_extracts_course_level_number_from_course_code(self):
+        self.assertEqual(SEED.extract_course_level_number("PHYSICS 2B03"), 2)
+        self.assertEqual(SEED.extract_course_level_number("SCIENCE 1A03"), 1)
+        self.assertIsNone(SEED.extract_course_level_number("INVALID"))
 
 
 if __name__ == "__main__":

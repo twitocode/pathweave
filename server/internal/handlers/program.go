@@ -19,10 +19,13 @@ func HandleGetProgramRequirements(ps *service.ProgramService) http.HandlerFunc {
 			common.WriteError(w, http.StatusBadRequest, "invalid onboarding info")
 			return
 		}
-		err := ps.GetProgramRequirements(r.Context(), body.Name)
-    if err != nil {
-      log.Error("error with finding program requirements", zap.Error(err))
-      common.WriteError(w, http.StatusInternalServerError,"An error occured")
-    }
+		requirements, err := ps.GetProgramRequirements(r.Context(), body.Name)
+		if err != nil {
+			log.Error("error with finding program requirements", zap.Error(err))
+			common.WriteError(w, http.StatusInternalServerError, "An error occurred")
+			return
+		}
+
+		common.WriteJSON(w, http.StatusOK, requirements)
 	}
 }

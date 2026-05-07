@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Program Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #dbe2ea;
+      --input-bg: #ffffff;
+      --button-bg: #0f172a;
+      --button-text: #f8fafc;
+      --code-bg: #eef2f7;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1220;
+        --card: #111a2c;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --border: #24324d;
+        --input-bg: #0f172a;
+        --button-bg: #2563eb;
+        --button-text: #eff6ff;
+        --code-bg: #1f2937;
+      }
+    }
+
+    body { background: var(--bg); color: var(--text); }
+    .hint { color: var(--muted); }
+    .panel { background: var(--card); border-color: var(--border); }
+    .field {
+      background: var(--input-bg);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .field::placeholder { color: var(--muted); }
+    .primary-button { background: var(--button-bg); color: var(--button-text); }
+    code { background: var(--code-bg); padding: 0.1rem 0.3rem; border-radius: 4px; }
+    .result-box {
+      padding: 0.75rem 0.9rem;
+      border-radius: 8px;
+      border: 1px solid;
+    }
+    .result-error {
+      background: #fff4f4;
+      border-color: #f1c1c1;
+      color: #7f1d1d;
+    }
+    .result-success {
+      background: #f3fff7;
+      border-color: #b7e4c7;
+      color: #14532d;
+    }
+    @media (prefers-color-scheme: dark) {
+      .result-error {
+        background: #2a1215;
+        border-color: #7f1d1d;
+        color: #fecaca;
+      }
+      .result-success {
+        background: #102a1f;
+        border-color: #166534;
+        color: #bbf7d0;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen px-4 py-8 font-sans">
+  <main class="mx-auto max-w-6xl">
+  <h1 class="mb-2 text-3xl font-bold tracking-tight">Program Admin</h1>
+  <p class="hint mb-6">Manually add or update one program and its course requirements.</p>
+
+  <section class="panel mb-3 rounded-2xl border p-3 shadow-sm">
+    <h2 class="mb-3 text-lg font-semibold">Edit Existing Program</h2>
+    <form class="flex flex-col gap-3 sm:flex-row sm:items-end" action="/programs/edit" method="get">
+      <div class="flex-1">
+        <label class="mb-1.5 block text-sm font-semibold" for="edit-program-id">Program</label>
+        <select class="field w-full rounded-lg border px-3 py-2" id="edit-program-id" name="id">
+          <option value="">Select a program...</option>
+          {{ range .Programs }}
+          <option value="{{ .ID }}"{{ if and $.Selected (eq $.Selected.ID .ID) }} selected{{ end }}>{{ .Name }}</option>
+          {{ end }}
+        </select>
+      </div>
+      <button class="primary-button rounded-lg px-4 py-2 font-semibold" type="submit">Edit Program</button>
+      <a class="rounded-lg border border-slate-300 px-4 py-2 text-center font-semibold dark:border-slate-600" href="/">New Program</a>
+    </form>
+  </section>
+
+  {{ if .Error }}
+  <div class="result-box result-error mb-4">{{ .Error }}</div>
+  {{ end }}
+
+  <form class="panel rounded-2xl border p-3 shadow-sm" hx-post="/programs" hx-target="#result" hx-swap="innerHTML">
+    <div class="grid gap-3 md:grid-cols-2">
+      <div>
+        <label class="mb-1.5 block text-sm font-semibold" for="name">Program Name</label>
+        <input class="field w-full rounded-lg border px-3 py-2" id="name" name="name" placeholder="Economics, Honours (B.A.)" value="{{ if .Selected }}{{ .Selected.Name }}{{ end }}" required>
+      </div>
+
+      <div>
+        <label class="mb-1.5 block text-sm font-semibold" for="source_url">Source URL (optional)</label>
+        <input class="field w-full rounded-lg border px-3 py-2" id="source_url" name="source_url" placeholder="https://academiccalendars.romcmaster.ca/..." value="{{ if .Selected }}{{ .Selected.SourceURL }}{{ end }}">
+      </div>
+    </div>
+
+    <input id="requirements_structure" name="requirements_structure" type="hidden">
+
+    <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h2 class="text-base font-semibold">Requirements</h2>
+        <p class="hint text-xs">Add levels, then groups, then course/text rows. If a program does not use levels, use "Add Group Without Level" and it will be saved inside a shell level with <code>level_number: null</code>.</p>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        <button class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold dark:border-slate-600" type="button" onclick="addLevel()">Add Level</button>
+        <button class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold dark:border-slate-600" type="button" onclick="addGroupWithoutLevel()">Add Group Without Level</button>
+      </div>
+    </div>
+
+    <div id="levels" class="mt-3 space-y-3"></div>
+
+    <div class="mt-2 flex flex-wrap justify-end gap-1.5 border-t pt-2" style="border-color: var(--border);">
+      <button class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold dark:border-slate-600" type="button" onclick="addLevelToEndAndScroll()">Add Level</button>
+      <button class="rounded border border-slate-300 px-2 py-1 text-xs font-semibold dark:border-slate-600" type="button" onclick="addGroupWithoutLevelBottom()">Add Group (No Level)</button>
+    </div>
+
+    <button class="primary-button mt-5 rounded-lg px-4 py-2 font-semibold" type="submit" onclick="syncRequirementsStructure()">Save Program</button>
+  </form>
+
+  <div id="result" class="mt-4"></div>
+  </main>
+
+  <script>
+    const initialLevels = {{ .InitialLevelsJS }};
+
+    document.querySelector("form[hx-post='/programs']").addEventListener("submit", syncRequirementsStructure);
+
+    /** Delegate clicks so remove actions always work (avoids HTMX / form edge cases with static handlers). */
+    document.getElementById("levels").addEventListener("click", function (e) {
+      // Clicking button label text can make target a Text node; normalize to an Element.
+      let t = e.target;
+      if (t.nodeType === Node.TEXT_NODE) t = t.parentElement;
+      if (!(t instanceof Element)) return;
+
+      const removeLevelBtn = t.closest("[data-remove-level]");
+      if (removeLevelBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const level = removeLevelBtn.closest(".level-container");
+        if (level) level.remove();
+        if (document.querySelectorAll(".level-container").length === 0) addLevel();
+        return;
+      }
+
+      const addGroupBtn = t.closest("[data-add-group]");
+      if (addGroupBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        addGroup(addGroupBtn);
+        return;
+      }
+
+      const removeGroupBtn = t.closest("[data-remove-group]");
+      if (removeGroupBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        removeGroupBtn.closest(".group-container")?.remove();
+        return;
+      }
+
+      const addReqBtn = t.closest("[data-add-requirement]");
+      if (addReqBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        addRequirement(addReqBtn, {}, { scroll: true, focus: true });
+        return;
+      }
+
+      const removeReqBtn = t.closest("[data-remove-requirement]");
+      if (removeReqBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        removeReqBtn.closest(".requirement-row")?.remove();
+      }
+    });
+
+    /** Enter in course code → add another row (course type) and focus it. */
+    document.getElementById("levels").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      let el = e.target;
+      if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+      if (!(el instanceof Element)) return;
+      if (!el.matches("input.course-code")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const row = el.closest(".requirement-row");
+      const group = row?.closest(".group-container");
+      if (!group) return;
+      const addBtn = group.querySelector("[data-add-requirement]");
+      addRequirement(addBtn, { kind: "course" }, { scroll: true, focus: true });
+    });
+
+    function addLevelToEndAndScroll() {
+      const level = addLevel({});
+      level.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function addGroupWithoutLevelBottom() {
+      addGroupWithoutLevel();
+      const shell = [...document.querySelectorAll(".level-container")].find((lvl) => lvl.dataset.shell === "true");
+      const lastGroup = shell?.querySelector(".groups")?.lastElementChild;
+      lastGroup?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function addLevel(levelData = {}) {
+      const levels = document.getElementById("levels");
+      const level = document.createElement("section");
+      level.className = "panel level-container rounded-2xl border border-l-4 border-l-red-500 p-3";
+      level.innerHTML = `
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div class="grid flex-1 gap-2 sm:grid-cols-[1fr_0.5fr]">
+            <div>
+              <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Level Number</label>
+              <input class="field level-number w-full rounded-lg border px-2 py-1.5" placeholder="I, II, III or blank">
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Index</label>
+              <input class="field level-index w-full rounded-lg border px-2 py-1.5" type="number" min="1">
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold dark:border-slate-600" type="button" data-add-group>Add Group</button>
+            <button class="rounded-lg border border-red-300 px-2.5 py-1.5 text-sm font-semibold text-red-700 dark:border-red-900 dark:text-red-300" type="button" data-remove-level>Remove Level</button>
+          </div>
+        </div>
+        <div class="groups mt-3 space-y-3"></div>
+        <div class="mt-3 flex flex-wrap justify-end gap-2">
+          <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold dark:border-slate-600" type="button" data-add-group>Add Group</button>
+        </div>
+      `;
+      levels.appendChild(level);
+      level.querySelector(".level-number").value = levelData.LevelNumber ?? levelData.level_number ?? "";
+      level.querySelector(".level-index").value = levelData.Index ?? levelData.index ?? levels.children.length;
+      const addGroupTrigger = level.querySelector("[data-add-group]");
+      for (const group of (levelData.Groups || levelData.groups || [])) addGroup(addGroupTrigger, group);
+      if (level.querySelectorAll(".group-container").length === 0) addGroup(addGroupTrigger);
+      return level;
+    }
+
+    function addGroupWithoutLevel() {
+      let shell = [...document.querySelectorAll(".level-container")].find((level) => level.dataset.shell === "true");
+      if (!shell) {
+        shell = addLevel({ level_number: "", index: 1, groups: [] });
+        shell.dataset.shell = "true";
+        shell.querySelector(".level-number").placeholder = "No level system";
+      }
+      addGroup(shell.querySelector("[data-add-group]"));
+    }
+
+    function addGroup(button, groupData = {}) {
+      const level = button.closest(".level-container");
+      const groups = level.querySelector(".groups");
+      const group = document.createElement("section");
+      group.className = "panel group-container rounded-xl border border-l-4 border-l-blue-500 p-3";
+      group.innerHTML = `
+        <div class="flex flex-wrap items-end gap-2">
+          <div class="min-w-[8rem] flex-1 basis-[10rem]">
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Group Name</label>
+            <input class="field group-name w-full rounded-lg border px-2 py-1.5" placeholder="Component A, electives, core...">
+          </div>
+          <div class="w-20 shrink-0 sm:w-24">
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Units</label>
+            <input class="field group-units w-full rounded-lg border px-2 py-1.5" placeholder="3–6">
+          </div>
+          <label class="flex shrink-0 items-center gap-2 self-end rounded-lg border px-2 py-1.5 text-sm font-semibold" style="border-color: var(--border);">
+            <input class="choose-one h-4 w-4" type="checkbox">
+            Choose 1
+          </label>
+          <button class="shrink-0 rounded-lg border border-red-300 px-2.5 py-1.5 text-sm font-semibold text-red-700 dark:border-red-900 dark:text-red-300" type="button" data-remove-group>Remove Group</button>
+        </div>
+        <div class="requirements mt-2 space-y-2"></div>
+        <div class="mt-2 flex justify-end">
+          <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold dark:border-slate-600" type="button" data-add-requirement>Add Course/Text</button>
+        </div>
+      `;
+      groups.appendChild(group);
+      group.querySelector(".group-name").value = groupData.Name ?? groupData.name ?? "";
+      group.querySelector(".group-units").value = groupData.Units ?? groupData.units ?? "";
+      group.querySelector(".choose-one").checked = Boolean(groupData.ChooseOne ?? groupData.choose_one ?? false);
+      const addReqTrigger = group.querySelector("[data-add-requirement]");
+      for (const req of (groupData.Requirements || groupData.requirements || [])) addRequirement(addReqTrigger, req, {});
+      if (group.querySelectorAll(".requirement-row").length === 0) addRequirement(addReqTrigger, {}, {});
+    }
+
+    function focusPrimaryField(row) {
+      if (!row) return;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const kind = row.querySelector(".requirement-kind").value;
+          if (kind === "text") {
+            row.querySelector(".requirement-text")?.focus();
+          } else {
+            const input = row.querySelector(".course-code");
+            input?.focus();
+            if (input && typeof input.select === "function") input.select();
+          }
+        });
+      });
+    }
+
+    function addRequirement(button, rowData = {}, opts = {}) {
+      const scroll = Boolean(opts.scroll);
+      const focus = Boolean(opts.focus);
+      const group = button.closest(".group-container");
+      const rows = group.querySelector(".requirements");
+      const row = document.createElement("div");
+      row.className = "requirement-row flex flex-wrap items-end gap-2 rounded-lg border p-2";
+      row.style.borderColor = "var(--border)";
+      row.innerHTML = `
+        <div class="w-[6.5rem] shrink-0">
+          <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Type</label>
+          <select class="field requirement-kind w-full rounded-lg border px-2 py-1.5" onchange="syncRequirementRow(this)">
+            <option value="course">Course</option>
+            <option value="text">Text</option>
+          </select>
+        </div>
+        <div class="min-w-[10rem] flex-1 basis-[14rem]">
+          <div class="course-input">
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Course Code</label>
+            <input class="field course-code w-full rounded-lg border px-2 py-1.5" placeholder="ENGPHYS 2A04">
+          </div>
+          <div class="text-input hidden">
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Requirement Text</label>
+            <textarea class="field requirement-text min-h-10 w-full rounded-lg border px-2 py-1.5" rows="2" placeholder="Choose 3 units from..."></textarea>
+          </div>
+        </div>
+        <button class="shrink-0 self-end rounded-lg border border-red-300 px-2.5 py-1.5 text-sm font-semibold text-red-700 dark:border-red-900 dark:text-red-300" type="button" data-remove-requirement>Remove</button>
+      `;
+      rows.appendChild(row);
+      row.querySelector(".requirement-kind").value = rowData.Kind || rowData.kind || "course";
+      row.querySelector(".course-code").value = rowData.CourseCode || rowData.course_code || "";
+      row.querySelector(".requirement-text").value = rowData.Text || rowData.text || "";
+      syncRequirementRow(row.querySelector(".requirement-kind"));
+      if (scroll) row.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (focus) focusPrimaryField(row);
+      return row;
+    }
+
+    function syncRequirementRow(select) {
+      const row = select.closest(".requirement-row");
+      const isText = select.value === "text";
+      row.querySelector(".course-input").classList.toggle("hidden", isText);
+      row.querySelector(".text-input").classList.toggle("hidden", !isText);
+    }
+
+    function syncRequirementsStructure() {
+      const levels = [...document.querySelectorAll(".level-container")].map((level, index) => ({
+        level_number: level.querySelector(".level-number").value.trim() || null,
+        index: Number(level.querySelector(".level-index").value) || index + 1,
+        groups: [...level.querySelectorAll(".group-container")].map((group) => ({
+          name: group.querySelector(".group-name").value.trim(),
+          units: group.querySelector(".group-units").value.trim(),
+          choose_one: group.querySelector(".choose-one").checked,
+          requirements: [...group.querySelectorAll(".requirement-row")].map((row) => ({
+            kind: row.querySelector(".requirement-kind").value,
+            course_code: row.querySelector(".course-code")?.value.trim() || "",
+            text: row.querySelector(".requirement-text")?.value.trim() || "",
+          })),
+        })),
+      }));
+      document.getElementById("requirements_structure").value = JSON.stringify({ levels });
+    }
+
+    for (const level of initialLevels) addLevel(level);
+  </script>
+</body>
+</html>

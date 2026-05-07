@@ -22,6 +22,33 @@ STRUCTURAL_LINE_PATTERN = re.compile(
 )
 
 
+def roman_to_int(roman):
+    if not roman:
+        return None
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+    total = 0
+    prev = 0
+    for char in reversed(roman.upper()):
+        value = values.get(char)
+        if value is None:
+            return None
+        if value < prev:
+            total -= value
+        else:
+            total += value
+            prev = value
+    return total
+
+
+def extract_course_code(text):
+    if not text:
+        return None
+    match = COURSE_LINE_PATTERN.search(text)
+    if not match:
+        return None
+    return match.group(1)
+
+
 def _clean_line(line):
     line = re.sub(r"\s+", " ", line).strip()
     return line
@@ -75,8 +102,11 @@ def parse_requirements_by_level(raw_text):
     for line in lines:
         level_match = LEVEL_HEADER_PATTERN.match(line)
         if level_match:
+            level_roman = level_match.group(1).upper()
             current_level = {
-                "level": level_match.group(1),
+                "level": level_roman,
+                "level_roman": level_roman,
+                "level_number": roman_to_int(level_roman),
                 "total_units": int(level_match.group(2)),
                 "unit_groups": [],
             }
@@ -86,8 +116,13 @@ def parse_requirements_by_level(raw_text):
 
         program_total_match = PROGRAM_TOTAL_PATTERN.match(line)
         if program_total_match and current_level is None:
+            start_roman = program_total_match.group(2).upper()
+            end_roman = program_total_match.group(3).upper()
+            level_roman = f"{start_roman}-{end_roman}"
             current_level = {
-                "level": f"{program_total_match.group(2)}-{program_total_match.group(3)}",
+                "level": level_roman,
+                "level_roman": level_roman,
+                "level_number": None,
                 "total_units": int(program_total_match.group(1)),
                 "unit_groups": [],
             }
@@ -139,9 +174,9 @@ def parse_requirements_by_level(raw_text):
             {"type": "course", "text": line, "course_code": course_code}
         )
 
-        if line not in flat_seen:
-            flat_seen.add(line)
-            flat_course_requirements.append(line)
+        if course_code not in flat_seen:
+            flat_seen.add(course_code)
+            flat_course_requirements.append(course_code)
 
     for level_data in grouped:
         for unit_group in level_data.get("unit_groups", []):
@@ -198,7 +233,15 @@ async def fetch_program_requirements(context, url, name, semaphore):
             if parsed_courses:
                 course_requirements = parsed_courses
             else:
-                course_requirements = fallback_courses
+                fallback_codes = []
+                seen = set()
+                for line in fallback_courses:
+                    course_code = extract_course_code(line)
+                    if not course_code or course_code in seen:
+                        continue
+                    seen.add(course_code)
+                    fallback_codes.append(course_code)
+                course_requirements = fallback_codes
 
             if not course_requirements:
                 content = await page.inner_text(".block_content")
@@ -231,11 +274,37 @@ async def main():
         # Extract all program links
         programs = await main_page.evaluate("""
             () => {
-                const container = document.querySelector('td.block_content') || document.body;
-                return Array.from(container.querySelectorAll("a[href*='preview_program.php']")).map(a => ({
-                    name: a.innerText.trim(),
-                    url: a.href
-                })).filter(p => p.name.length > 5);
+                const container = document.querySelector("td.block_content") || document.body;
+                const results = [];
+                const seen = new Set();
+                let currentSection = "";
+
+                for (const child of Array.from(container.children)) {
+                    const heading = child.querySelector("strong");
+                    if (heading && heading.innerText) {
+                        currentSection = heading.innerText.trim();
+                    }
+
+                    if (!child.matches("ul.program-list")) {
+                        continue;
+                    }
+
+                    if (!/bachelor/i.test(currentSection)) {
+                        continue;
+                    }
+
+                    for (const a of Array.from(child.querySelectorAll("a[href*='preview_program.php']"))) {
+                        const name = (a.innerText || "").trim();
+                        const url = a.href;
+                        if (!name || !url || seen.has(url)) {
+                            continue;
+                        }
+                        seen.add(url);
+                        results.push({ name, url });
+                    }
+                }
+
+                return results;
             }
         """)
         print(f"Found {len(programs)} programs.")

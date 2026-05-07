@@ -1,0 +1,9 @@
+{{ if .Error }}
+<div class="result-box result-error">
+  {{ .Error }}
+</div>
+{{ else if .Message }}
+<div class="result-box result-success">
+  {{ .Message }}
+</div>
+{{ end }}

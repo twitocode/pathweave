@@ -1,13 +1,19 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
 	"github.com/twitocode/pathweave/go-api/internal/db"
 	"go.uber.org/zap"
 )
+
+type ProgramRequirements struct {
+	ProgramID          int64           `json:"program_id"`
+	ProgramName        string          `json:"program_name"`
+	RequirementGroups  json.RawMessage `json:"requirement_groups"`
+	RequirementCourses any             `json:"requirement_courses"`
+}
 
 type ProgramService struct {
 	log *zap.Logger
@@ -22,24 +28,18 @@ func (ps *ProgramService) GetProgramInfo(name string) {
 
 }
 
-func (ps *ProgramService) GetProgramRequirements(ctx context.Context, name string) error {
+func (ps *ProgramService) GetProgramRequirements(ctx context.Context, name string) (ProgramRequirements, error) {
 	data, err := ps.db.GetProgramRequirements(ctx, name)
 
 	if err != nil {
-		return err
-	}
-  
-	var requirementGroups interface{}
-	json.Unmarshal(data.RequirementGroups, &requirementGroups)
-
-	var prettyJSON bytes.Buffer
-	err = json.Indent(&prettyJSON, data.RequirementGroups, "", "\t")
-	if err != nil {
-
-		return err
+		return ProgramRequirements{}, err
 	}
 
-	ps.log.Info("CSP Violation: %s", zap.String("groups", prettyJSON.String()))
+	return ProgramRequirements{
+		ProgramID:          data.ProgramID,
+		ProgramName:        data.ProgramName,
+		RequirementGroups:  json.RawMessage(data.RequirementGroups),
+		RequirementCourses: data.RequirementCourses,
+	}, nil
 
-	return nil
 }

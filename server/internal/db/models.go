@@ -18,6 +18,7 @@ type Course struct {
 	Prerequisites []string
 	Units         int32
 	Term          string
+	LevelNumber   pgtype.Int4
 }
 
 type CourseTeacher struct {
@@ -26,8 +27,11 @@ type CourseTeacher struct {
 }
 
 type Program struct {
-	ID   int64
-	Name string
+	ID                  int64
+	Name                string
+	SourceUrl           pgtype.Text
+	RequirementCodes    []string
+	RequirementsByLevel []byte
 }
 
 type ProgramCourse struct {
@@ -36,13 +40,15 @@ type ProgramCourse struct {
 }
 
 type ProgramRequirementGroup struct {
-	ID              int64
-	ProgramID       int64
-	LevelLabel      string
-	LevelTotalUnits pgtype.Int4
-	GroupUnits      pgtype.Text
-	SortOrder       int32
-	ChooseOne       bool
+	ID                 int64
+	ProgramID          int64
+	LevelLabel         string
+	LevelTotalUnits    pgtype.Int4
+	GroupUnits         pgtype.Text
+	SortOrder          int32
+	ChooseOne          bool
+	RequirementLevelID pgtype.Int8
+	GroupName          pgtype.Text
 }
 
 type ProgramRequirementItem struct {
@@ -53,6 +59,13 @@ type ProgramRequirementItem struct {
 	CourseID           pgtype.Int8
 	IsCourse           bool
 	SortOrder          int32
+}
+
+type ProgramRequirementLevel struct {
+	ID          int64
+	ProgramID   int64
+	LevelNumber pgtype.Text
+	SortOrder   int32
 }
 
 type ScheduleCombo struct {

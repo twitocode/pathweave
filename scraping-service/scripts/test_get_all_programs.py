@@ -1,6 +1,17 @@
 import importlib.util
 import pathlib
+import sys
+import types
 import unittest
+
+sys.modules.setdefault(
+    "playwright",
+    types.SimpleNamespace(async_api=types.SimpleNamespace(async_playwright=None)),
+)
+sys.modules.setdefault(
+    "playwright.async_api",
+    types.SimpleNamespace(async_playwright=None),
+)
 
 SCRIPT_PATH = pathlib.Path(__file__).resolve().parent / "get_all_programs.py"
 SPEC = importlib.util.spec_from_file_location("get_all_programs", SCRIPT_PATH)
@@ -34,6 +45,8 @@ ECON 4A03 - Honours Economic Analysis
 
         self.assertEqual(len(grouped), 1)
         self.assertEqual(grouped[0]["level"], "I-IV")
+        self.assertEqual(grouped[0]["level_roman"], "I-IV")
+        self.assertIsNone(grouped[0]["level_number"])
         self.assertEqual(grouped[0]["total_units"], 120)
         self.assertEqual([group["units"] for group in grouped[0]["unit_groups"]], ["30", "6", "12"])
         self.assertTrue(grouped[0]["unit_groups"][0]["choose_one"])
@@ -56,7 +69,7 @@ ECON 4A03 - Honours Economic Analysis
             [item["course_code"] for item in grouped[0]["unit_groups"][2]["requirements"]],
             ["ECON 2B03", "ECON 2H03", "ECON 2HH3", "ECON 4A03"],
         )
-        self.assertIn("ECON 2Z03 - Intermediate Microeconomics I", flat_courses)
+        self.assertIn("ECON 2Z03", flat_courses)
 
     def test_parses_unit_ranges_as_strings(self):
         raw_text = """
@@ -73,6 +86,8 @@ Electives, of which at least six units must be taken from outside of Anthropolog
         grouped, _ = GET_ALL_PROGRAMS.parse_requirements_by_level(raw_text)
 
         self.assertEqual(len(grouped), 1)
+        self.assertEqual(grouped[0]["level_roman"], "I")
+        self.assertEqual(grouped[0]["level_number"], 1)
         self.assertEqual(grouped[0]["unit_groups"][0]["units"], "0-3")
         self.assertEqual(grouped[0]["unit_groups"][1]["units"], "33-36")
         self.assertFalse(grouped[0]["unit_groups"][0]["choose_one"])

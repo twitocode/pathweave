@@ -24,47 +24,110 @@ func (q *Queries) GetProgramIDByName(ctx context.Context, name string) (int64, e
 }
 
 const getProgramRequirements = `-- name: GetProgramRequirements :one
-SELECT 
+WITH requirement_hierarchy AS (
+  SELECT
+    prl.program_id,
+    jsonb_build_object(
+      'levels',
+      jsonb_agg(
+        jsonb_build_object(
+          'level_number', prl.level_number,
+          'index', prl.sort_order,
+          'groups', COALESCE(
+            (
+              SELECT jsonb_agg(
+                jsonb_build_object(
+                  'name', prg.group_name,
+                  'units', prg.group_units,
+                  'choose_one', prg.choose_one,
+                  'requirements', COALESCE(
+                    (
+                      SELECT jsonb_agg(
+                        jsonb_build_object(
+                          'type', CASE WHEN pri.is_course THEN 'course' ELSE 'text' END,
+                          'text', pri.requirement_text,
+                          'course_code', pri.course_code,
+                          'course', CASE
+                            WHEN c.id IS NULL THEN NULL
+                            ELSE jsonb_build_object(
+                              'id', c.id,
+                              'code', c.code,
+                              'name', c.name,
+                              'description', c.description,
+                              'restrictions', c.restrictions,
+                              'units', c.units,
+                              'term', c.term,
+                              'level_number', c.level_number
+                            )
+                          END
+                        )
+                        ORDER BY pri.sort_order, pri.id
+                      )
+                      FROM program_requirement_item pri
+                      LEFT JOIN course c ON c.id = pri.course_id
+                      WHERE pri.requirement_group_id = prg.id
+                    ),
+                    '[]'::jsonb
+                  )
+                )
+                ORDER BY prg.sort_order, prg.id
+              )
+              FROM program_requirement_group prg
+              WHERE prg.requirement_level_id = prl.id
+            ),
+            '[]'::jsonb
+          )
+        )
+        ORDER BY prl.sort_order, prl.id
+      )
+    ) AS requirements
+  FROM program_requirement_level prl
+  GROUP BY prl.program_id
+)
+SELECT
     p.id as program_id,
     p.name as program_name,
-    (
-        SELECT json_agg(json_build_object(
-            'group_id', prg.id,
-            'level_label', prg.level_label,
-            'level_total_units', prg.level_total_units,
-            'group_units', prg.group_units,
-            'choose_one', prg.choose_one,
-            'items', (
-                SELECT json_agg(json_build_object(
-                    'text', pri.requirement_text,
-                    'code', pri.course_code,
-                    'id', pri.course_id,
-                    'is_course', pri.is_course,
-                    'name', c.name,
-                    'description', c.description,
-                    'restrictions', c.restrictions
-                ) ORDER BY pri.sort_order)
-                FROM program_requirement_item pri
-                LEFT JOIN course c ON pri.course_id = c.id
-                WHERE pri.requirement_group_id = prg.id
-            )
-        ) ORDER BY prg.sort_order)
-        FROM program_requirement_group prg
-        WHERE prg.program_id = p.id
-    ) as requirement_groups
+    COALESCE(rh.requirements, p.requirements_by_level, '{"levels":[]}'::jsonb) as requirement_groups,
+    COALESCE(
+      (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'code', req.code,
+            'id', c.id,
+            'name', c.name,
+            'description', c.description,
+            'restrictions', c.restrictions,
+            'units', c.units,
+            'term', c.term,
+            'level_number', c.level_number
+          )
+          ORDER BY req.ord
+        )
+        FROM unnest(p.requirement_codes) WITH ORDINALITY AS req(code, ord)
+        LEFT JOIN course c ON c.code = req.code
+      ),
+      '[]'::jsonb
+    ) as requirement_courses
 FROM program p
+LEFT JOIN requirement_hierarchy rh ON rh.program_id = p.id
 WHERE p.name = $1
 `
 
 type GetProgramRequirementsRow struct {
-	ProgramID         int64
-	ProgramName       string
-	RequirementGroups []byte
+	ProgramID          int64
+	ProgramName        string
+	RequirementGroups  []byte
+	RequirementCourses interface{}
 }
 
 func (q *Queries) GetProgramRequirements(ctx context.Context, name string) (GetProgramRequirementsRow, error) {
 	row := q.db.QueryRow(ctx, getProgramRequirements, name)
 	var i GetProgramRequirementsRow
-	err := row.Scan(&i.ProgramID, &i.ProgramName, &i.RequirementGroups)
+	err := row.Scan(
+		&i.ProgramID,
+		&i.ProgramName,
+		&i.RequirementGroups,
+		&i.RequirementCourses,
+	)
 	return i, err
 }
