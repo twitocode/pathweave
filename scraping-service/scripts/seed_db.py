@@ -39,6 +39,37 @@ def extract_course_code(requirement_text):
         return match.group(1)
     return None
 
+
+def build_fallback_requirement_groups(requirements, course_map):
+    items = []
+    for sort_order, requirement_text in enumerate(requirements):
+        requirement_text = (requirement_text or "").strip()
+        if not requirement_text:
+            continue
+
+        course_code = extract_course_code(requirement_text)
+        course_id = course_map.get(course_code) if course_code else None
+        items.append({
+            "requirement_text": requirement_text,
+            "course_code": course_code,
+            "course_id": course_id,
+            "is_course": bool(course_code),
+            "sort_order": sort_order,
+        })
+
+    if not items:
+        return []
+
+    return [{
+        "level_label": "Program",
+        "level_total_units": None,
+        "group_units": None,
+        "choose_one": False,
+        "sort_order": 0,
+        "items": items,
+    }]
+
+
 def seed():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -155,7 +186,8 @@ def seed():
                 level_total_units = parse_optional_int(level_data.get("total_units"))
 
                 for group_index, group_data in enumerate(level_data.get("unit_groups", [])):
-                    group_units = parse_optional_int(group_data.get("units"))
+                    group_units = group_data.get("units")
+                    choose_one = bool(group_data.get("choose_one"))
                     cur.execute(
                         """
                         INSERT INTO program_requirement_group (
@@ -163,9 +195,10 @@ def seed():
                             level_label,
                             level_total_units,
                             group_units,
+                            choose_one,
                             sort_order
                         )
-                        VALUES (%s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         RETURNING id
                         """,
                         (
@@ -173,6 +206,7 @@ def seed():
                             level_label,
                             level_total_units,
                             group_units,
+                            choose_one,
                             (level_index * 100) + group_index,
                         ),
                     )
@@ -186,9 +220,8 @@ def seed():
                         course_code = item.get("course_code") or extract_course_code(requirement_text)
                         course_id = course_map.get(course_code) if course_code else None
                         is_course = bool(course_code)
-                        is_admission_placeholder = requirement_text == "See Admission Requirements"
 
-                        if not is_course and not is_admission_placeholder:
+                        if not is_course and item.get("type") != "text":
                             continue
 
                         cur.execute(
@@ -218,10 +251,60 @@ def seed():
 
             # Backward-compatible fallback for older scrape output
             if not grouped_requirements:
-                for req in prog.get("requirements", []):
-                    req_code = extract_course_code(req)
-                    if req_code and req_code in course_map:
-                        program_courses.append((program_id, course_map[req_code]))
+                fallback_groups = build_fallback_requirement_groups(
+                    prog.get("requirements", []),
+                    course_map,
+                )
+                for group in fallback_groups:
+                    cur.execute(
+                        """
+                        INSERT INTO program_requirement_group (
+                            program_id,
+                            level_label,
+                            level_total_units,
+                            group_units,
+                            choose_one,
+                            sort_order
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            program_id,
+                            group["level_label"],
+                            group["level_total_units"],
+                            group["group_units"],
+                            group["choose_one"],
+                            group["sort_order"],
+                        ),
+                    )
+                    requirement_group_id = cur.fetchone()[0]
+
+                    for item in group["items"]:
+                        cur.execute(
+                            """
+                            INSERT INTO program_requirement_item (
+                                requirement_group_id,
+                                requirement_text,
+                                course_code,
+                                course_id,
+                                is_course,
+                                sort_order
+                            )
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                requirement_group_id,
+                                item["requirement_text"],
+                                item["course_code"],
+                                item["course_id"],
+                                item["is_course"],
+                                item["sort_order"],
+                            ),
+                        )
+
+                        if item["course_id"] is not None:
+                            program_courses.append((program_id, item["course_id"]))
 
         execute_values(cur, """
             INSERT INTO program_courses (program_id, course_id)

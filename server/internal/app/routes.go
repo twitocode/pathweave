@@ -33,5 +33,11 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Post("/", handlers.HandleOnboarding(s.Onboarding))
 	})
 
+	r.Route("/programs", func(r chi.Router) {
+		r.Use(mw.RequireAuth(cfg, s.Auth))
+
+		r.Get("/", handlers.HandleGetProgramRequirements(s.Program))
+	})
+
 	r.With(mw.RequireCSRF(cfg.SecretKey)).Post("/logout", handlers.HandleLogout(cfg, s.Auth))
 }

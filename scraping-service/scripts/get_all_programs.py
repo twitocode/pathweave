@@ -6,7 +6,14 @@ from playwright.async_api import async_playwright
 # Limit concurrent requests
 MAX_CONCURRENT_REQUESTS = 10
 LEVEL_HEADER_PATTERN = re.compile(r"^Level\s+([IVXLC]+)\s*:\s*(\d+)\s+Units?$", re.IGNORECASE)
-UNITS_HEADER_PATTERN = re.compile(r"^(\d+)\s+units?$", re.IGNORECASE)
+PROGRAM_TOTAL_PATTERN = re.compile(
+    r"^(\d+)\s+units?\s+total\b.*\bLevels?\s+([IVXLC]+)\s+to\s+([IVXLC]+)\b",
+    re.IGNORECASE,
+)
+UNITS_HEADER_PATTERN = re.compile(
+    r"^(?:component\s+[a-z0-9]+\s*-\s*)?(\d+(?:\s*-\s*\d+)?)\s+units?\b(.*)$",
+    re.IGNORECASE,
+)
 COURSE_LINE_PATTERN = re.compile(r"\b([A-Z]{2,10}\s\d[A-Z0-9]{3})\b")
 LEVEL_ONLY_PATTERN = re.compile(r"^Level\s+[IVXLC]+\b", re.IGNORECASE)
 STRUCTURAL_LINE_PATTERN = re.compile(
@@ -50,6 +57,21 @@ def parse_requirements_by_level(raw_text):
     current_level = None
     current_group = None
 
+    def add_text_hint_requirement(unit_group):
+        hints = [
+            hint
+            for hint in unit_group.get("_text_hints", [])
+            if not STRUCTURAL_LINE_PATTERN.match(hint)
+        ]
+        if not hints:
+            return
+
+        text = " ".join(hints).strip()
+        if text:
+            unit_group["requirements"].append(
+                {"type": "text", "text": text, "course_code": None}
+            )
+
     for line in lines:
         level_match = LEVEL_HEADER_PATTERN.match(line)
         if level_match:
@@ -62,10 +84,24 @@ def parse_requirements_by_level(raw_text):
             current_group = None
             continue
 
+        program_total_match = PROGRAM_TOTAL_PATTERN.match(line)
+        if program_total_match and current_level is None:
+            current_level = {
+                "level": f"{program_total_match.group(2)}-{program_total_match.group(3)}",
+                "total_units": int(program_total_match.group(1)),
+                "unit_groups": [],
+            }
+            grouped.append(current_level)
+            current_group = None
+            continue
+
         units_match = UNITS_HEADER_PATTERN.match(line)
         if units_match and current_level:
+            units_value = re.sub(r"\s+", "", units_match.group(1))
+            suffix = (units_match.group(2) or "").strip().lower()
             current_group = {
-                "units": int(units_match.group(1)),
+                "units": units_value,
+                "choose_one": "from" in suffix,
                 "requirements": [],
                 "_text_hints": [],
             }
@@ -81,12 +117,15 @@ def parse_requirements_by_level(raw_text):
         if current_group is None:
             current_group = {
                 "units": None,
+                "choose_one": False,
                 "requirements": [],
                 "_text_hints": [],
             }
             current_level["unit_groups"].append(current_group)
 
         if STRUCTURAL_LINE_PATTERN.match(line):
+            if line.lower() == "from":
+                current_group["choose_one"] = True
             current_group["_text_hints"].append(line)
             continue
 
@@ -108,15 +147,7 @@ def parse_requirements_by_level(raw_text):
         for unit_group in level_data.get("unit_groups", []):
             requirements = unit_group.get("requirements", [])
             if not requirements:
-                text_hints = " ".join(unit_group.get("_text_hints", [])).lower()
-                if "admission" in text_hints:
-                    unit_group["requirements"] = [
-                        {
-                            "type": "text",
-                            "text": "See Admission Requirements",
-                            "course_code": None,
-                        }
-                    ]
+                add_text_hint_requirement(unit_group)
                 continue
 
             has_course = any(item.get("course_code") for item in requirements)

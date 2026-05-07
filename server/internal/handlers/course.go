@@ -1,5 +1,2 @@
 package handlers
 
-func HandleCourseSelection() {
-  
-}

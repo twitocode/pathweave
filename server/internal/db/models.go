@@ -40,8 +40,9 @@ type ProgramRequirementGroup struct {
 	ProgramID       int64
 	LevelLabel      string
 	LevelTotalUnits pgtype.Int4
-	GroupUnits      pgtype.Int4
+	GroupUnits      pgtype.Text
 	SortOrder       int32
+	ChooseOne       bool
 }
 
 type ProgramRequirementItem struct {
