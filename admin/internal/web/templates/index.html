@@ -144,6 +144,59 @@
 
     document.querySelector("form[hx-post='/programs']").addEventListener("submit", syncRequirementsStructure);
 
+    let draggedGroup = null;
+
+    document.getElementById("levels").addEventListener("mousedown", function(e) {
+      const handle = e.target.closest("[data-drag-handle]");
+      const group = e.target.closest(".group-container");
+      if (group) {
+        group.draggable = !!handle;
+      }
+    });
+
+    document.getElementById("levels").addEventListener("dragstart", function(e) {
+      const group = e.target.closest(".group-container");
+      if (group) {
+        draggedGroup = group;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", "");
+        setTimeout(() => group.classList.add("opacity-50"), 0);
+      }
+    });
+
+    document.getElementById("levels").addEventListener("dragend", function(e) {
+      if (draggedGroup) {
+        draggedGroup.classList.remove("opacity-50");
+        draggedGroup = null;
+      }
+    });
+
+    document.getElementById("levels").addEventListener("dragover", function(e) {
+      e.preventDefault();
+      if (!draggedGroup) return;
+
+      const targetGroup = e.target.closest(".group-container");
+      const groupsContainer = e.target.closest(".groups");
+
+      if (targetGroup && targetGroup !== draggedGroup) {
+        const rect = targetGroup.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        if (e.clientY < midpoint) {
+          if (draggedGroup.nextSibling !== targetGroup) {
+            targetGroup.parentNode.insertBefore(draggedGroup, targetGroup);
+          }
+        } else {
+          if (targetGroup.nextSibling !== draggedGroup) {
+            targetGroup.parentNode.insertBefore(draggedGroup, targetGroup.nextSibling);
+          }
+        }
+      } else if (groupsContainer && !targetGroup) {
+        if (groupsContainer.lastElementChild !== draggedGroup) {
+          groupsContainer.appendChild(draggedGroup);
+        }
+      }
+    });
+
     /** Delegate clicks so remove actions always work (avoids HTMX / form edge cases with static handlers). */
     document.getElementById("levels").addEventListener("click", function (e) {
       // Clicking button label text can make target a Text node; normalize to an Element.
@@ -242,7 +295,7 @@
             <button class="rounded-lg border border-red-300 px-2.5 py-1.5 text-sm font-semibold text-red-700 dark:border-red-900 dark:text-red-300" type="button" data-remove-level>Remove Level</button>
           </div>
         </div>
-        <div class="groups mt-3 space-y-3"></div>
+        <div class="groups mt-3 min-h-[2rem] space-y-3"></div>
         <div class="mt-3 flex flex-wrap justify-end gap-2">
           <button class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold dark:border-slate-600" type="button" data-add-group>Add Group</button>
         </div>
@@ -273,6 +326,9 @@
       group.className = "panel group-container rounded-xl border border-l-4 border-l-blue-500 p-3";
       group.innerHTML = `
         <div class="flex flex-wrap items-end gap-2">
+          <div class="cursor-grab self-center p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 active:cursor-grabbing" data-drag-handle title="Drag to reorder">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
+          </div>
           <div class="min-w-[8rem] flex-1 basis-[10rem]">
             <label class="mb-1 block text-xs font-semibold uppercase tracking-wide hint">Group Name</label>
             <input class="field group-name w-full rounded-lg border px-2 py-1.5" placeholder="Component A, electives, core...">
