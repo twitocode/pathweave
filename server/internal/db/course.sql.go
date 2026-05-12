@@ -43,6 +43,30 @@ func (q *Queries) AddUserCompletedCourse(ctx context.Context, arg AddUserComplet
 	return err
 }
 
+const getCourseByCode = `-- name: GetCourseByCode :one
+SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number 
+FROM course
+WHERE code = $1
+LIMIT 1
+`
+
+func (q *Queries) GetCourseByCode(ctx context.Context, code string) (Course, error) {
+	row := q.db.QueryRow(ctx, getCourseByCode, code)
+	var i Course
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.Restrictions,
+		&i.Prerequisites,
+		&i.Units,
+		&i.Term,
+		&i.LevelNumber,
+	)
+	return i, err
+}
+
 const getCourseIDByCode = `-- name: GetCourseIDByCode :one
 SELECT id
 FROM course

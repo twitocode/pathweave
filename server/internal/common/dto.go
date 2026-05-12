@@ -26,3 +26,4 @@ type OnboardingInfo struct {
 type ProgramRequirementsInfo struct {
   Name string `json:"name"`
 }
+

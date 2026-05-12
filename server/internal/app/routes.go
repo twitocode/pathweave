@@ -39,5 +39,11 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Get("/", handlers.HandleGetProgramRequirements(s.Program))
 	})
 
+	r.Route("/courses/{code}", func(r chi.Router) {
+		r.Use(mw.RequireAuth(cfg, s.Auth))
+
+		r.Get("/", handlers.HandleGetCourseByCode(s.Course))
+	})
+
 	r.With(mw.RequireCSRF(cfg.SecretKey)).Post("/logout", handlers.HandleLogout(cfg, s.Auth))
 }

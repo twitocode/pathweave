@@ -13,3 +13,9 @@ SELECT id
 FROM course
 WHERE code = $1
 LIMIT 1;
+
+-- name: GetCourseByCode :one
+SELECT * 
+FROM course
+WHERE code = $1
+LIMIT 1;
