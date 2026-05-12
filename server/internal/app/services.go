@@ -13,6 +13,7 @@ type Services struct {
 	Auth *service.AuthService
 	User *service.UserService
   Onboarding *service.OnboardingService
+  Program *service.ProgramService
   Course *service.CourseService
 }
 
@@ -24,5 +25,6 @@ func NewServices(cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger) *Servi
 		User:       service.NewUserService(queries, log),
 		Onboarding: service.NewOnboardingService(queries, log),
     Course: service.NewCourseService(queries, log),
+    Program: service.NewProgramService(queries, log),
 	}
 }

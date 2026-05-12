@@ -1,3 +1,6 @@
+# Local MCP secrets (Lazyweb bearer token, etc.)
+.cursor/mcp.json
+
 .DS_Store
 .Procfile
 .overmind.sock

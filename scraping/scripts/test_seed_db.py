@@ -1,5 +1,7 @@
 import importlib.util
 import pathlib
+import sys
+import types
 import unittest
 
 TRANSFORM_PATH = pathlib.Path(__file__).resolve().parent / "schedule_seed_transform.py"
@@ -8,6 +10,25 @@ assert SPEC is not None
 assert SPEC.loader is not None
 TRANSFORM = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(TRANSFORM)
+
+SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
+sys.modules.setdefault("psycopg2", types.SimpleNamespace(connect=lambda *_args, **_kwargs: None))
+sys.modules.setdefault(
+    "psycopg2.extras",
+    types.SimpleNamespace(
+        execute_values=lambda *_args, **_kwargs: None,
+        Json=lambda value: value,
+    ),
+)
+sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda *_args, **_kwargs: None))
+
+SEED_PATH = pathlib.Path(__file__).resolve().parent / "seed_db.py"
+SEED_SPEC = importlib.util.spec_from_file_location("seed_db", SEED_PATH)
+assert SEED_SPEC is not None
+assert SEED_SPEC.loader is not None
+SEED = importlib.util.module_from_spec(SEED_SPEC)
+SEED_SPEC.loader.exec_module(SEED)
 
 
 class BuildScheduleValuesTests(unittest.TestCase):
@@ -122,6 +143,23 @@ class BuildScheduleValuesTests(unittest.TestCase):
         self.assertEqual(rows[0][9], "Online")
         self.assertEqual(rows[1][8], "TBD")
         self.assertEqual(rows[1][9], "TBD")
+
+
+class RequirementNormalizationTests(unittest.TestCase):
+    def test_normalizes_flat_requirements_to_unique_course_codes(self):
+        requirements = [
+            "ECON 2Z03 - Intermediate Microeconomics I",
+            "ECON 2ZZ3 - Intermediate Microeconomics II",
+            "ECON 2Z03 - Intermediate Microeconomics I",
+            "electives",
+        ]
+        normalized = SEED.normalize_program_requirement_codes(requirements)
+        self.assertEqual(normalized, ["ECON 2Z03", "ECON 2ZZ3"])
+
+    def test_extracts_course_level_number_from_course_code(self):
+        self.assertEqual(SEED.extract_course_level_number("PHYSICS 2B03"), 2)
+        self.assertEqual(SEED.extract_course_level_number("SCIENCE 1A03"), 1)
+        self.assertIsNone(SEED.extract_course_level_number("INVALID"))
 
 
 if __name__ == "__main__":

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -36,8 +35,8 @@ func (os *OnboardingService) Handle(ctx context.Context, user *db.User, onboardi
 		return fmt.Errorf("onboarding is already completed")
 	}
 
-	bedtime := parseTime(onboardingInfo.Bedtime)
-	wakeUpTime := parseTime(onboardingInfo.WakeUpTime)
+	bedtime := common.StringToTime(onboardingInfo.Bedtime)
+	wakeUpTime := common.StringToTime(onboardingInfo.WakeUpTime)
 
 	programID, err := os.db.GetProgramIDByName(ctx, onboardingInfo.Program)
 	if err != nil {
@@ -93,19 +92,4 @@ func (os *OnboardingService) Handle(ctx context.Context, user *db.User, onboardi
 	}
 
 	return nil
-}
-
-func parseTime(input string) pgtype.Time {
-	parsedTime, err := time.Parse("15:04:05", input)
-	if err != nil {
-		panic(err)
-	}
-
-	wakeUpTimeMicroseconds := int64(parsedTime.Hour()*3600+parsedTime.Minute()*60+parsedTime.Second()) * 1000000
-
-	time := pgtype.Time{
-		Microseconds: wakeUpTimeMicroseconds,
-		Valid:        true,
-	}
-	return time
 }

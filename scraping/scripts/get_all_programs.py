@@ -6,13 +6,47 @@ from playwright.async_api import async_playwright
 # Limit concurrent requests
 MAX_CONCURRENT_REQUESTS = 10
 LEVEL_HEADER_PATTERN = re.compile(r"^Level\s+([IVXLC]+)\s*:\s*(\d+)\s+Units?$", re.IGNORECASE)
-UNITS_HEADER_PATTERN = re.compile(r"^(\d+)\s+units?$", re.IGNORECASE)
+PROGRAM_TOTAL_PATTERN = re.compile(
+    r"^(\d+)\s+units?\s+total\b.*\bLevels?\s+([IVXLC]+)\s+to\s+([IVXLC]+)\b",
+    re.IGNORECASE,
+)
+UNITS_HEADER_PATTERN = re.compile(
+    r"^(?:component\s+[a-z0-9]+\s*-\s*)?(\d+(?:\s*-\s*\d+)?)\s+units?\b(.*)$",
+    re.IGNORECASE,
+)
 COURSE_LINE_PATTERN = re.compile(r"\b([A-Z]{2,10}\s\d[A-Z0-9]{3})\b")
 LEVEL_ONLY_PATTERN = re.compile(r"^Level\s+[IVXLC]+\b", re.IGNORECASE)
 STRUCTURAL_LINE_PATTERN = re.compile(
     r"^(from|or|electives|course list|as outlined below:?|fall and winter term|spring/summer term)$",
     re.IGNORECASE,
 )
+
+
+def roman_to_int(roman):
+    if not roman:
+        return None
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+    total = 0
+    prev = 0
+    for char in reversed(roman.upper()):
+        value = values.get(char)
+        if value is None:
+            return None
+        if value < prev:
+            total -= value
+        else:
+            total += value
+            prev = value
+    return total
+
+
+def extract_course_code(text):
+    if not text:
+        return None
+    match = COURSE_LINE_PATTERN.search(text)
+    if not match:
+        return None
+    return match.group(1)
 
 
 def _clean_line(line):
@@ -50,12 +84,46 @@ def parse_requirements_by_level(raw_text):
     current_level = None
     current_group = None
 
+    def add_text_hint_requirement(unit_group):
+        hints = [
+            hint
+            for hint in unit_group.get("_text_hints", [])
+            if not STRUCTURAL_LINE_PATTERN.match(hint)
+        ]
+        if not hints:
+            return
+
+        text = " ".join(hints).strip()
+        if text:
+            unit_group["requirements"].append(
+                {"type": "text", "text": text, "course_code": None}
+            )
+
     for line in lines:
         level_match = LEVEL_HEADER_PATTERN.match(line)
         if level_match:
+            level_roman = level_match.group(1).upper()
             current_level = {
-                "level": level_match.group(1),
+                "level": level_roman,
+                "level_roman": level_roman,
+                "level_number": roman_to_int(level_roman),
                 "total_units": int(level_match.group(2)),
+                "unit_groups": [],
+            }
+            grouped.append(current_level)
+            current_group = None
+            continue
+
+        program_total_match = PROGRAM_TOTAL_PATTERN.match(line)
+        if program_total_match and current_level is None:
+            start_roman = program_total_match.group(2).upper()
+            end_roman = program_total_match.group(3).upper()
+            level_roman = f"{start_roman}-{end_roman}"
+            current_level = {
+                "level": level_roman,
+                "level_roman": level_roman,
+                "level_number": None,
+                "total_units": int(program_total_match.group(1)),
                 "unit_groups": [],
             }
             grouped.append(current_level)
@@ -64,8 +132,11 @@ def parse_requirements_by_level(raw_text):
 
         units_match = UNITS_HEADER_PATTERN.match(line)
         if units_match and current_level:
+            units_value = re.sub(r"\s+", "", units_match.group(1))
+            suffix = (units_match.group(2) or "").strip().lower()
             current_group = {
-                "units": int(units_match.group(1)),
+                "units": units_value,
+                "choose_one": "from" in suffix,
                 "requirements": [],
                 "_text_hints": [],
             }
@@ -81,12 +152,15 @@ def parse_requirements_by_level(raw_text):
         if current_group is None:
             current_group = {
                 "units": None,
+                "choose_one": False,
                 "requirements": [],
                 "_text_hints": [],
             }
             current_level["unit_groups"].append(current_group)
 
         if STRUCTURAL_LINE_PATTERN.match(line):
+            if line.lower() == "from":
+                current_group["choose_one"] = True
             current_group["_text_hints"].append(line)
             continue
 
@@ -100,23 +174,15 @@ def parse_requirements_by_level(raw_text):
             {"type": "course", "text": line, "course_code": course_code}
         )
 
-        if line not in flat_seen:
-            flat_seen.add(line)
-            flat_course_requirements.append(line)
+        if course_code not in flat_seen:
+            flat_seen.add(course_code)
+            flat_course_requirements.append(course_code)
 
     for level_data in grouped:
         for unit_group in level_data.get("unit_groups", []):
             requirements = unit_group.get("requirements", [])
             if not requirements:
-                text_hints = " ".join(unit_group.get("_text_hints", [])).lower()
-                if "admission" in text_hints:
-                    unit_group["requirements"] = [
-                        {
-                            "type": "text",
-                            "text": "See Admission Requirements",
-                            "course_code": None,
-                        }
-                    ]
+                add_text_hint_requirement(unit_group)
                 continue
 
             has_course = any(item.get("course_code") for item in requirements)
@@ -167,7 +233,15 @@ async def fetch_program_requirements(context, url, name, semaphore):
             if parsed_courses:
                 course_requirements = parsed_courses
             else:
-                course_requirements = fallback_courses
+                fallback_codes = []
+                seen = set()
+                for line in fallback_courses:
+                    course_code = extract_course_code(line)
+                    if not course_code or course_code in seen:
+                        continue
+                    seen.add(course_code)
+                    fallback_codes.append(course_code)
+                course_requirements = fallback_codes
 
             if not course_requirements:
                 content = await page.inner_text(".block_content")
@@ -200,11 +274,37 @@ async def main():
         # Extract all program links
         programs = await main_page.evaluate("""
             () => {
-                const container = document.querySelector('td.block_content') || document.body;
-                return Array.from(container.querySelectorAll("a[href*='preview_program.php']")).map(a => ({
-                    name: a.innerText.trim(),
-                    url: a.href
-                })).filter(p => p.name.length > 5);
+                const container = document.querySelector("td.block_content") || document.body;
+                const results = [];
+                const seen = new Set();
+                let currentSection = "";
+
+                for (const child of Array.from(container.children)) {
+                    const heading = child.querySelector("strong");
+                    if (heading && heading.innerText) {
+                        currentSection = heading.innerText.trim();
+                    }
+
+                    if (!child.matches("ul.program-list")) {
+                        continue;
+                    }
+
+                    if (!/bachelor/i.test(currentSection)) {
+                        continue;
+                    }
+
+                    for (const a of Array.from(child.querySelectorAll("a[href*='preview_program.php']"))) {
+                        const name = (a.innerText || "").trim();
+                        const url = a.href;
+                        if (!name || !url || seen.has(url)) {
+                            continue;
+                        }
+                        seen.add(url);
+                        results.push({ name, url });
+                    }
+                }
+
+                return results;
             }
         """)
         print(f"Found {len(programs)} programs.")

@@ -2,7 +2,7 @@ import json
 import os
 import re
 import psycopg2
-from psycopg2.extras import execute_values
+from psycopg2.extras import Json, execute_values
 from dotenv import load_dotenv
 from schedule_seed_transform import build_schedule_values
 
@@ -38,6 +38,37 @@ def extract_course_code(requirement_text):
     if match:
         return match.group(1)
     return None
+
+
+def normalize_course_code(value):
+    if not value:
+        return None
+    code = extract_course_code(value)
+    if not code:
+        return None
+    return code.strip()
+
+
+def extract_course_level_number(course_code):
+    if not course_code:
+        return None
+    match = re.search(r"\b[A-Z]{2,10}\s(\d)", course_code)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def normalize_program_requirement_codes(requirements):
+    normalized = []
+    seen = set()
+    for requirement in requirements:
+        code = normalize_course_code(requirement)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        normalized.append(code)
+    return normalized
+
 
 def seed():
     conn = get_db_connection()
@@ -85,6 +116,7 @@ def seed():
         course_values = []
         for course in all_courses:
             code = course["code"]
+            level_number = extract_course_level_number(code)
             course_values.append((
                 code,
                 course["name"],
@@ -92,11 +124,12 @@ def seed():
                 course.get("restrictions", ""),
                 course.get("prerequisites", []),
                 parse_units(course["units"]),
-                course_terms.get(code, "Unknown")
+                course_terms.get(code, "Unknown"),
+                level_number,
             ))
         
         execute_values(cur, """
-            INSERT INTO course (code, name, description, restrictions, prerequisites, units, term)
+            INSERT INTO course (code, name, description, restrictions, prerequisites, units, term, level_number)
             VALUES %s
             ON CONFLICT (code) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -104,7 +137,8 @@ def seed():
                 restrictions = EXCLUDED.restrictions,
                 prerequisites = EXCLUDED.prerequisites,
                 units = EXCLUDED.units,
-                term = EXCLUDED.term
+                term = EXCLUDED.term,
+                level_number = EXCLUDED.level_number
         """, course_values)
 
         # Get course code to ID mapping for relationships
@@ -145,83 +179,62 @@ def seed():
             all_programs = json.load(f)
         
         program_courses = []
+        scraped_program_names = []
+
         for prog in all_programs:
-            cur.execute("INSERT INTO program (name) VALUES (%s) RETURNING id", (prog["program_name"],))
-            program_id = cur.fetchone()[0]
-
+            scraped_program_names.append(prog["program_name"])
+            requirement_codes = normalize_program_requirement_codes(prog.get("requirements", []))
             grouped_requirements = prog.get("requirements_by_level", [])
-            for level_index, level_data in enumerate(grouped_requirements):
-                level_label = level_data.get("level", "")
-                level_total_units = parse_optional_int(level_data.get("total_units"))
 
-                for group_index, group_data in enumerate(level_data.get("unit_groups", [])):
-                    group_units = parse_optional_int(group_data.get("units"))
-                    cur.execute(
-                        """
-                        INSERT INTO program_requirement_group (
-                            program_id,
-                            level_label,
-                            level_total_units,
-                            group_units,
-                            sort_order
-                        )
-                        VALUES (%s, %s, %s, %s, %s)
-                        RETURNING id
-                        """,
-                        (
-                            program_id,
-                            level_label,
-                            level_total_units,
-                            group_units,
-                            (level_index * 100) + group_index,
-                        ),
-                    )
-                    requirement_group_id = cur.fetchone()[0]
+            cur.execute("SELECT id FROM program WHERE name = %s LIMIT 1", (prog["program_name"],))
+            row = cur.fetchone()
+            if row:
+                program_id = row[0]
+                cur.execute(
+                    """
+                    UPDATE program
+                    SET source_url = %s,
+                        requirement_codes = %s,
+                        requirements_by_level = %s
+                    WHERE id = %s
+                    """,
+                    (
+                        prog.get("url"),
+                        requirement_codes,
+                        Json(grouped_requirements),
+                        program_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO program (name, source_url, requirement_codes, requirements_by_level)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        prog["program_name"],
+                        prog.get("url"),
+                        requirement_codes,
+                        Json(grouped_requirements),
+                    ),
+                )
+                program_id = cur.fetchone()[0]
 
-                    for item_index, item in enumerate(group_data.get("requirements", [])):
-                        requirement_text = (item.get("text") or "").strip()
-                        if not requirement_text:
-                            continue
+            cur.execute("DELETE FROM program_courses WHERE program_id = %s", (program_id,))
 
-                        course_code = item.get("course_code") or extract_course_code(requirement_text)
-                        course_id = course_map.get(course_code) if course_code else None
-                        is_course = bool(course_code)
-                        is_admission_placeholder = requirement_text == "See Admission Requirements"
+            for course_code in requirement_codes:
+                course_id = course_map.get(course_code)
+                if course_id is None:
+                    continue
+                program_courses.append((program_id, course_id))
 
-                        if not is_course and not is_admission_placeholder:
-                            continue
-
-                        cur.execute(
-                            """
-                            INSERT INTO program_requirement_item (
-                                requirement_group_id,
-                                requirement_text,
-                                course_code,
-                                course_id,
-                                is_course,
-                                sort_order
-                            )
-                            VALUES (%s, %s, %s, %s, %s, %s)
-                            """,
-                            (
-                                requirement_group_id,
-                                requirement_text,
-                                course_code,
-                                course_id,
-                                is_course,
-                                item_index,
-                            ),
-                        )
-
-                        if course_id is not None:
-                            program_courses.append((program_id, course_id))
-
-            # Backward-compatible fallback for older scrape output
-            if not grouped_requirements:
-                for req in prog.get("requirements", []):
-                    req_code = extract_course_code(req)
-                    if req_code and req_code in course_map:
-                        program_courses.append((program_id, course_map[req_code]))
+        # Remove stale programs not present in latest scrape output.
+        if scraped_program_names:
+            cur.execute(
+                "DELETE FROM program WHERE name <> ALL(%s)",
+                (scraped_program_names,),
+            )
 
         execute_values(cur, """
             INSERT INTO program_courses (program_id, course_id)

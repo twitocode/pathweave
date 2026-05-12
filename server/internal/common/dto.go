@@ -21,3 +21,9 @@ type OnboardingInfo struct {
 	TeachingStyle    int      `json:"teaching_style" validate:"required,number"`
 	AvoidedCourses   []string `json:"avoided_courses" validate:"required,dive"`
 }
+
+
+type ProgramRequirementsInfo struct {
+  Name string `json:"name"`
+}
+

@@ -1,0 +1,36 @@
+package common
+
+import (
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+func StringToTime(input string) pgtype.Time {
+	parsedTime, err := time.Parse("15:04:05", input)
+	if err != nil {
+		panic(err)
+	}
+
+	wakeUpTimeMicroseconds := int64(parsedTime.Hour()*3600+parsedTime.Minute()*60+parsedTime.Second()) * 1000000
+
+	time := pgtype.Time{
+		Microseconds: wakeUpTimeMicroseconds,
+		Valid:        true,
+	}
+	return time
+}
+
+func TimeToString(pt pgtype.Time) string {
+	t := time.Unix(0, pt.Microseconds*1000).UTC()
+	return t.Format("15:04")
+}
+
+func NumericToFloat64(pn pgtype.Numeric) float64 {
+	f8, err := pn.Float64Value()
+	if err != nil {
+		return 0.0
+	}
+
+	return f8.Float64
+}
