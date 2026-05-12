@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addUserAvoidedCourse = `-- name: AddUserAvoidedCourse :exec
@@ -79,4 +80,67 @@ func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, er
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getSchedulesForCourse = `-- name: GetSchedulesForCourse :many
+SELECT sc.id, sc.combo_index, sc.day, sc.start_time, sc.end_time, sc.type, sc.section, sc.instructor_name, sc.building, sc.room_number, sc.mode, sc.is_in_person, sc.course_id, t.avg_difficulty, t.avg_rating
+FROM schedule_combo AS sc
+JOIN teacher t
+  ON t.name = sc.instructor_name
+WHERE sc.course_id = $1
+ORDER BY sc.section
+`
+
+type GetSchedulesForCourseRow struct {
+	ID             int32
+	ComboIndex     int32
+	Day            string
+	StartTime      pgtype.Time
+	EndTime        pgtype.Time
+	Type           string
+	Section        string
+	InstructorName string
+	Building       string
+	RoomNumber     string
+	Mode           string
+	IsInPerson     bool
+	CourseID       int64
+	AvgDifficulty  pgtype.Numeric
+	AvgRating      pgtype.Numeric
+}
+
+func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]GetSchedulesForCourseRow, error) {
+	rows, err := q.db.Query(ctx, getSchedulesForCourse, courseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSchedulesForCourseRow
+	for rows.Next() {
+		var i GetSchedulesForCourseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ComboIndex,
+			&i.Day,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Type,
+			&i.Section,
+			&i.InstructorName,
+			&i.Building,
+			&i.RoomNumber,
+			&i.Mode,
+			&i.IsInPerson,
+			&i.CourseID,
+			&i.AvgDifficulty,
+			&i.AvgRating,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
