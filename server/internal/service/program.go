@@ -9,10 +9,9 @@ import (
 )
 
 type ProgramRequirements struct {
-	ProgramID          int64           `json:"program_id"`
-	ProgramName        string          `json:"program_name"`
-	RequirementGroups  json.RawMessage `json:"requirement_groups"`
-	RequirementCourses any             `json:"requirement_courses"`
+	ProgramID         int64           `json:"program_id"`
+	ProgramName       string          `json:"program_name"`
+	RequirementGroups json.RawMessage `json:"requirement_groups"`
 }
 
 type ProgramService struct {
@@ -36,10 +35,9 @@ func (ps *ProgramService) GetProgramRequirements(ctx context.Context, name strin
 	}
 
 	return ProgramRequirements{
-		ProgramID:          data.ProgramID,
-		ProgramName:        data.ProgramName,
-		RequirementGroups:  json.RawMessage(data.RequirementGroups),
-		RequirementCourses: data.RequirementCourses,
+		ProgramID:         data.ProgramID,
+		ProgramName:       data.ProgramName,
+		RequirementGroups: json.RawMessage(data.RequirementGroups),
 	}, nil
 
 }
