@@ -30,3 +30,4 @@ RETURNING user_id;
 -- name: HasCompletedOnboarding :one
 SELECT COALESCE((SELECT completed FROM user_details WHERE user_id = $1), false)::boolean;
 
+

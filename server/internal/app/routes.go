@@ -25,7 +25,7 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Get("/login", handlers.HandleLogin(s.Auth))
 		r.Get("/login/google", handlers.HandleLogin(s.Auth))
 		r.Get("/callback", handlers.HandleCallback(cfg, s.Auth))
-		r.With(mw.RequireAuth(cfg, s.Auth)).Get("/me", handlers.HandleMe())
+		r.With(mw.RequireAuth(cfg, s.Auth)).Get("/me", handlers.HandleMe(s.Auth))
 	})
 
 	r.Route("/onboarding", func(r chi.Router) {
