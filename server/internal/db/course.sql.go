@@ -123,6 +123,55 @@ func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, er
 	return id, err
 }
 
+const getCoursesByVectorSearch = `-- name: GetCoursesByVectorSearch :many
+SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number 
+FROM course 
+ORDER BY embedding <=> $1 
+LIMIT 5
+`
+
+type GetCoursesByVectorSearchRow struct {
+	ID            int64
+	Code          string
+	Name          string
+	Description   string
+	Restrictions  string
+	Prerequisites []string
+	Units         int32
+	Term          string
+	LevelNumber   pgtype.Int4
+}
+
+func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, embedding pgvector.Vector) ([]GetCoursesByVectorSearchRow, error) {
+	rows, err := q.db.Query(ctx, getCoursesByVectorSearch, embedding)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCoursesByVectorSearchRow
+	for rows.Next() {
+		var i GetCoursesByVectorSearchRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.Description,
+			&i.Restrictions,
+			&i.Prerequisites,
+			&i.Units,
+			&i.Term,
+			&i.LevelNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSchedulesForCourse = `-- name: GetSchedulesForCourse :many
 SELECT sc.id, sc.combo_index, sc.day, sc.start_time, sc.end_time, sc.type, sc.section, sc.instructor_name, sc.building, sc.room_number, sc.mode, sc.is_in_person, sc.course_id, t.avg_difficulty, t.avg_rating
 FROM schedule_combo AS sc

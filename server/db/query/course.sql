@@ -38,3 +38,8 @@ SELECT array_agg(code)::varchar[]
 FROM course;
 
 
+-- name: GetCoursesByVectorSearch :many
+SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number 
+FROM course 
+ORDER BY embedding <=> $1 
+LIMIT 5;

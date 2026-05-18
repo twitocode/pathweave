@@ -59,15 +59,38 @@ func (cs *CourseService) GetCourseInfo(ctx context.Context, code string) (*Cours
 		return nil, err
 	}
 
-	return &CourseInfo{
-		ID:          int(course.ID),
-		Code:        course.Code,
-		Name:        course.Name,
-		Description: course.Description,
-		Units:       int(course.Units),
-		Term:        course.Term,
-		LevelNumber: int(course.LevelNumber.Int32),
-	}, nil
+	return cs.formatCourseInfo(course), nil
+}
+
+func (cs *CourseService) formatCourseInfo(course interface{}) *CourseInfo {
+	switch c := course.(type) {
+	case db.GetCourseByCodeRow:
+		{
+			return &CourseInfo{
+				ID:          int(c.ID),
+				Code:        c.Code,
+				Name:        c.Name,
+				Description: c.Description,
+				Units:       int(c.Units),
+				Term:        c.Term,
+				LevelNumber: int(c.LevelNumber.Int32),
+			}
+		}
+	case db.GetCoursesByVectorSearchRow:
+		{
+			return &CourseInfo{
+				ID:          int(c.ID),
+				Code:        c.Code,
+				Name:        c.Name,
+				Description: c.Description,
+				Units:       int(c.Units),
+				Term:        c.Term,
+				LevelNumber: int(c.LevelNumber.Int32),
+			}
+		}
+	}
+
+	return nil
 }
 
 func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) ([]*Schedule, error) {
@@ -157,9 +180,9 @@ func (cs *CourseService) CreateEmbeddingForEveryCourse(ctx context.Context) {
 		if end > len(courseCodes) {
 			end = len(courseCodes)
 		}
-		
+
 		batch := courseCodes[i:end]
-		
+
 		g.Go(func() error {
 			return cs.CreateCourseEmbeddingsBatched(gCtx, batch)
 		})
@@ -170,4 +193,22 @@ func (cs *CourseService) CreateEmbeddingForEveryCourse(ctx context.Context) {
 	} else {
 		cs.log.Info("Successfully created embeddings for all courses!")
 	}
+}
+
+func (cs *CourseService) VectorSearch(ctx context.Context, query string) ([]*CourseInfo, error) {
+	embedding, err := cs.es.CreateEmbedding(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := cs.db.GetCoursesByVectorSearch(ctx, pgvector.NewVector(common.Float64ToFloat32Slice(embedding)))
+	if err != nil {
+		return nil, err
+	}
+
+	searchResults := make([]*CourseInfo, len(res))
+	for i, course := range res {
+		searchResults[i] = cs.formatCourseInfo(course)
+	}
+	return searchResults, nil
 }
