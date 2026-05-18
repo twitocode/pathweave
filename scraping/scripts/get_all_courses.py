@@ -56,63 +56,93 @@ async def fetch_and_parse_course(
             prerequisites = []
             recommended = ""
             restrictions = ""
-            
-            # 1. Prerequisite extraction
-            prereq_tag = soup.find("strong", string=lambda t: t and "Prerequisite" in t)
-            if not prereq_tag:
-                prereq_tag = soup.find(lambda tag: tag.name == "strong" and "Prerequisite" in tag.text)
 
-            if prereq_tag:
-                p_html_parts = []
-                curr = prereq_tag.next_sibling
+            # Helper: find a tag by name list and text match
+            def find_label_tag(soup, label):
+                """Find a <strong> or <b> tag whose text contains the given label."""
+                for tag_name in ["strong", "b"]:
+                    tag = soup.find(tag_name, string=lambda t: t and label in t)
+                    if tag:
+                        return tag
+                    # Fallback: check .text in case string matching fails
+                    tag = soup.find(lambda t: t.name == tag_name and label in t.get_text())
+                    if tag:
+                        return tag
+                return None
+
+            def extract_text_after_tag(tag):
+                """Collect text content after a label tag until the next <br>, <hr>, or label tag."""
+                parts = []
+                curr = tag.next_sibling
                 while curr:
                     if hasattr(curr, 'name') and curr.name in ['br', 'hr']:
                         break
-                    p_html_parts.append(str(curr))
+                    if hasattr(curr, 'name') and curr.name in ['strong', 'b']:
+                        break
+                    parts.append(str(curr))
                     curr = curr.next_sibling
-                
-                full_p_html = "".join(p_html_parts)
-                p_soup = BeautifulSoup(f"<span>{full_p_html}</span>", "html.parser")
-                clean_p_text = p_soup.get_text().strip().lstrip(":").strip()
+                html = "".join(parts)
+                return BeautifulSoup(f"<span>{html}</span>", "html.parser").get_text().strip().lstrip(":").strip()
+
+            # 1. Prerequisite extraction
+            prereq_tag = find_label_tag(soup, "Prerequisite")
+            if prereq_tag:
+                clean_p_text = extract_text_after_tag(prereq_tag)
                 prerequisites = [x.strip().strip(".") for x in clean_p_text.split(",") if x.strip()]
 
-            # 2. Description and New Fields Extraction
+            # 2. Antirequisite / Restriction extraction (directly from HTML tags)
+            restriction_parts = []
+
+            # Find explicit Antirequisite(s): tag
+            antireq_tag = find_label_tag(soup, "Antirequisite")
+            if antireq_tag:
+                antireq_text = extract_text_after_tag(antireq_tag)
+                if antireq_text:
+                    restriction_parts.append(f"Antirequisite(s): {antireq_text}")
+
+            # 3. Description extraction
             hr = soup.find("hr")
             if hr:
+                # Collect text from <hr> until the first label tag (Prerequisite, Antirequisite, etc.)
                 desc_parts = []
                 curr = hr.next_sibling
                 while curr:
-                    if curr == prereq_tag:
+                    # Stop at prerequisite, antirequisite, or any bold label tag
+                    if curr == prereq_tag or curr == antireq_tag:
                         break
+                    if hasattr(curr, 'name') and curr.name in ['strong', 'b']:
+                        tag_text = curr.get_text()
+                        if any(kw in tag_text for kw in ["Prerequisite", "Antirequisite", "Co-requisite"]):
+                            break
                     desc_parts.append(str(curr))
                     curr = curr.next_sibling
                 
                 raw_desc = "".join(desc_parts).strip()
-                # Get text with space separator to keep it readable for regex
                 full_text = BeautifulSoup(raw_desc, "html.parser").get_text(separator=" ").strip()
-                # Clean up multiple spaces and weird characters
                 full_text = re.sub(r'\s+', ' ', full_text)
 
-                # Extraction Patterns
-                rec_pattern = r"([^.]*?\b(?:is|are|is strongly)\s+recommended\.)"
-                # Restrictions: Not open to... or Antirequisite...
-                rest_pattern = r"((?:Not open to students|Antirequisite\(s\):).*?(\.|$))"
-                # Lectures boilerplate
-                lecture_pattern = r"Lectures\s*\(.*?\)\s*;\s*.*?(?:\.|$)"
+                # Also scan the full page text for "Not open to students" restrictions
+                page_text = soup.get_text(separator=" ")
+                page_text = re.sub(r'\s+', ' ', page_text)
+                not_open_pattern = r"(Not open to students.*?\.)"
+                not_open_matches = re.findall(not_open_pattern, page_text, re.IGNORECASE)
+                for match in not_open_matches:
+                    clean_match = match.strip()
+                    if clean_match and clean_match not in restriction_parts:
+                        restriction_parts.append(clean_match)
+                        full_text = full_text.replace(clean_match, "")
+
+                restrictions = "\n".join(restriction_parts)
 
                 # Extract Recommended
+                rec_pattern = r"([^.]*?\b(?:is|are|is strongly)\s+recommended\.)"
                 rec_match = re.search(rec_pattern, full_text, re.IGNORECASE)
                 if rec_match:
                     recommended = rec_match.group(0).strip()
                     full_text = full_text.replace(recommended, "")
 
-                # Extract Restrictions
-                rest_match = re.search(rest_pattern, full_text, re.IGNORECASE)
-                if rest_match:
-                    restrictions = rest_match.group(0).strip()
-                    full_text = full_text.replace(restrictions, "")
-
                 # Filter out Lectures boilerplate
+                lecture_pattern = r"Lectures\s*\(.*?\)\s*;\s*.*?(?:\.|$)"
                 full_text = re.sub(lecture_pattern, "", full_text, flags=re.IGNORECASE)
                 
                 # Cleanup leftover Cross-list info if it's dangling

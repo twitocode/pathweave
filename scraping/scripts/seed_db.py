@@ -22,19 +22,10 @@ def parse_units(units_str):
     return 0
 
 
-def parse_optional_int(value):
-    if value is None:
-        return None
-    match = re.search(r"(\d+)", str(value))
-    if match:
-        return int(match.group(1))
-    return None
-
-
 def extract_course_code(requirement_text):
     if not requirement_text:
         return None
-    match = re.search(r"\b([A-Z]{2,10}\s\d[A-Z0-9]{2,4})\b", requirement_text)
+    match = re.search(r"\b([A-Z]{2,10}\s\d[A-Z0-9]{2,4}(?:\s+A\/B)?)\b", requirement_text)
     if match:
         return match.group(1)
     return None
@@ -69,6 +60,28 @@ def normalize_program_requirement_codes(requirements):
         normalized.append(code)
     return normalized
 
+
+def split_course_name(course_name):
+    """Split 'COMPSCI 1DM3 - Discrete Mathematics' into ('COMPSCI 1DM3', 'Discrete Mathematics')."""
+    if not course_name:
+        return "", ""
+    if " - " in course_name:
+        code, name = course_name.split(" - ", 1)
+        return code.strip(), name.strip()
+    return "", course_name.strip()
+
+
+def normalize_term(term_str):
+    if not term_str:
+        return "Unknown"
+    
+    term_str = term_str.strip()
+    # Check if the term starts with a 4-digit year (e.g. "2026 Spring/Summer")
+    match = re.match(r'^(\d{4})\s+(.+)$', term_str)
+    if match:
+        year, season = match.groups()
+        return f"{season.strip()} {year}"
+    return term_str
 
 def seed():
     conn = get_db_connection()
@@ -105,25 +118,34 @@ def seed():
         with open("data/all_courses.json", "r") as f:
             all_courses = json.load(f)
         
-        # We also need terms from all_possible_schedules.json
+        # Terms come from all_possible_schedules.json
         with open("data/all_possible_schedules.json", "r") as f:
             all_schedules = json.load(f)
         
         course_terms = {}
         for item in all_schedules:
-            course_terms[item["course_code"]] = item["term"]
+            course_terms[item["course_code"]] = normalize_term(item.get("term", ""))
 
         course_values = []
         for course in all_courses:
-            code = course["code"]
+            # Handle both raw (course_name) and cleaned (code/name) formats
+            if "code" in course and "name" in course:
+                code = course["code"]
+                name = course["name"]
+            else:
+                code, name = split_course_name(course.get("course_name", ""))
+
+            if not code:
+                continue
+
             level_number = extract_course_level_number(code)
             course_values.append((
                 code,
-                course["name"],
-                course["description"],
+                name,
+                course.get("description", ""),
                 course.get("restrictions", ""),
                 course.get("prerequisites", []),
-                parse_units(course["units"]),
+                parse_units(course.get("units", "")),
                 course_terms.get(code, "Unknown"),
                 level_number,
             ))
@@ -245,19 +267,45 @@ def seed():
         # 5. Course-Teacher Relationships
         print("Seeding course-teacher relationships...")
         course_teacher_values = []
+        teacher_program_values = []
+
+        # Build a reverse lookup: course_code -> set of program_ids
+        cur.execute("SELECT course_id, program_id FROM program_courses")
+        course_to_programs = {}
+        for course_id, program_id in cur.fetchall():
+            course_to_programs.setdefault(course_id, set()).add(program_id)
+
+        seen_teacher_programs = set()
+
         for prof in rmp_data.get("professors", []):
             teacher_id = teacher_map.get(prof["id"])
             if not teacher_id:
                 continue
             for course_code in prof.get("courses", []):
-                if course_code in course_map:
-                    course_teacher_values.append((course_map[course_code], teacher_id))
+                course_id = course_map.get(course_code)
+                if not course_id:
+                    continue
+                course_teacher_values.append((course_id, teacher_id))
+
+                # Also link teacher to every program that includes this course
+                for program_id in course_to_programs.get(course_id, []):
+                    key = (teacher_id, program_id)
+                    if key not in seen_teacher_programs:
+                        seen_teacher_programs.add(key)
+                        teacher_program_values.append(key)
         
         execute_values(cur, """
             INSERT INTO course_teachers (course_id, teacher_id)
             VALUES %s
             ON CONFLICT DO NOTHING
         """, course_teacher_values)
+
+        if teacher_program_values:
+            execute_values(cur, """
+                INSERT INTO teacher_programs (teacher_id, program_id)
+                VALUES %s
+                ON CONFLICT DO NOTHING
+            """, teacher_program_values)
 
         conn.commit()
         print("Database seeded successfully!")

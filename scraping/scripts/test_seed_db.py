@@ -161,6 +161,14 @@ class RequirementNormalizationTests(unittest.TestCase):
         self.assertEqual(SEED.extract_course_level_number("SCIENCE 1A03"), 1)
         self.assertIsNone(SEED.extract_course_level_number("INVALID"))
 
+    def test_normalize_term(self):
+        self.assertEqual(SEED.normalize_term("2026 Spring/Summer"), "Spring/Summer 2026")
+        self.assertEqual(SEED.normalize_term("Spring/Summer 2026"), "Spring/Summer 2026")
+        self.assertEqual(SEED.normalize_term("2021 Winter"), "Winter 2021")
+        self.assertEqual(SEED.normalize_term("Winter 2021"), "Winter 2021")
+        self.assertEqual(SEED.normalize_term("Unknown"), "Unknown")
+        self.assertEqual(SEED.normalize_term(""), "Unknown")
+
 
 if __name__ == "__main__":
     unittest.main()
