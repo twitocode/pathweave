@@ -7,6 +7,7 @@ package db
 import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 )
 
 type Course struct {
@@ -19,6 +20,7 @@ type Course struct {
 	Units         int32
 	Term          string
 	LevelNumber   pgtype.Int4
+	Embedding     pgvector.Vector
 }
 
 type CourseTeacher struct {

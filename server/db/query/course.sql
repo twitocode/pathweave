@@ -27,3 +27,8 @@ JOIN teacher t
   ON t.name = sc.instructor_name
 WHERE sc.course_id = $1
 ORDER BY sc.section;
+
+-- name: CreateEmbedding :exec
+UPDATE course
+SET embedding = $2
+WHERE code = $1;

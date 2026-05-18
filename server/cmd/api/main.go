@@ -11,8 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	pgxvec "github.com/pgvector/pgvector-go/pgx"
 	"go.uber.org/zap"
 
 	"github.com/twitocode/pathweave/go-api/internal/app"
@@ -31,7 +33,17 @@ func run(ctx context.Context, getenv func(string) string) error {
 	logger := config.NewLogger(getenv)
 	defer func() { _ = logger.Sync() }()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("db pool config: %w", err)
+	}
+	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		if _, err := conn.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS vector"); err != nil {
+			return err
+		}
+		return pgxvec.RegisterTypes(ctx, conn)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return fmt.Errorf("db pool: %w", err)
 	}

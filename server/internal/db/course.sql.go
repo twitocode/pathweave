@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/pgvector/pgvector-go"
 )
 
 const addUserAvoidedCourse = `-- name: AddUserAvoidedCourse :exec
@@ -44,8 +45,24 @@ func (q *Queries) AddUserCompletedCourse(ctx context.Context, arg AddUserComplet
 	return err
 }
 
+const createEmbedding = `-- name: CreateEmbedding :exec
+UPDATE course
+SET embedding = $2
+WHERE code = $1
+`
+
+type CreateEmbeddingParams struct {
+	Code      string
+	Embedding pgvector.Vector
+}
+
+func (q *Queries) CreateEmbedding(ctx context.Context, arg CreateEmbeddingParams) error {
+	_, err := q.db.Exec(ctx, createEmbedding, arg.Code, arg.Embedding)
+	return err
+}
+
 const getCourseByCode = `-- name: GetCourseByCode :one
-SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number 
+SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number, embedding 
 FROM course
 WHERE code = $1
 LIMIT 1
@@ -64,6 +81,7 @@ func (q *Queries) GetCourseByCode(ctx context.Context, code string) (Course, err
 		&i.Units,
 		&i.Term,
 		&i.LevelNumber,
+		&i.Embedding,
 	)
 	return i, err
 }
