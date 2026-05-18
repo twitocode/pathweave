@@ -29,6 +29,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
 RETURNING user_id;
 
 -- name: HasCompletedOnboarding :one
-SELECT COALESCE((SELECT completed FROM user_details WHERE user_id = $1), false)::boolean;
+SELECT EXISTS(SELECT 1 FROM user_details WHERE user_id = $1 AND completed = true)::boolean;
 
 

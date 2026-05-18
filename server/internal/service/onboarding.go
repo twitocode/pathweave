@@ -43,6 +43,7 @@ func (os *OnboardingService) Handle(ctx context.Context, user *db.User, onboardi
 		return fmt.Errorf("failed to find program %q: %w", onboardingInfo.Program, err)
 	}
 
+	// TODO: use avoided and completed courses
 	_, err = os.db.CreateUserDetails(ctx, db.CreateUserDetailsParams{
 		UserID: user.ID,
 		ProgramID: pgtype.Int8{

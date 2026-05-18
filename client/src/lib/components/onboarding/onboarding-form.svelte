@@ -23,15 +23,14 @@
 	const form = superForm(data.form, {
 		validators: zod4Client(onboardingSchema),
 		validationMethod: 'onblur',
-		resetForm: false
+		resetForm: false,
+		dataType: 'json',
 	});
 	const { form: formData, enhance, submitting, errors } = form;
 
 	let step = $state(1);
 
-	$effect(() => {
-		console.log(`[Onboarding] Step ${step} State:`, get(formData));
-	});
+
 
 	function validateStep1() {
 		const d = get(formData);

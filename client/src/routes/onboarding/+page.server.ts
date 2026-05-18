@@ -1,27 +1,9 @@
-import type { Actions, PageServerLoad } from './$types.js';
+import { onboardingSchema } from '$lib/components/onboarding/schema.js';
+import { getApiOrigin } from '$lib/server-url';
 import { fail, redirect } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
-import {
-	onboardingSchema,
-	type OnboardingFormData
-} from '$lib/components/onboarding/schema.js';
-
-const defaults: OnboardingFormData = {
-	program: '',
-	year: '1st Year',
-	completedCourses: [],
-	wakeUpTime: '',
-	bedtime: '19:00',
-	onCampus: true,
-	lat: 43.2614,
-	lng: -79.9198,
-	jobInfo: '',
-	futurePlans: '',
-	professorQuality: 2,
-	teachingStyle: 2,
-	avoidedCourses: []
-};
+import type { Actions, PageServerLoad } from './$types.js';
 
 export const load: PageServerLoad = async () => {
 	return {
@@ -29,13 +11,59 @@ export const load: PageServerLoad = async () => {
 	};
 };
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+// disgusting method
+function toSnakeCaseKeys(obj: JsonValue): JsonValue {
+	if (Array.isArray(obj)) {
+		return obj.map((v) => toSnakeCaseKeys(v));
+	}
+	if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
+		const record = obj as Record<string, JsonValue>;
+		return Object.keys(record).reduce(
+			(result, key) => {
+				const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+				result[snakeKey] = toSnakeCaseKeys(record[key]);
+				return result;
+			},
+			{} as Record<string, JsonValue>
+		);
+	}
+	return obj;
+}
+
 export const actions: Actions = {
 	default: async (event) => {
 		const form = await superValidate(event, zod4(onboardingSchema));
 		if (!form.valid) {
 			return fail(400, { form });
 		}
-		// Persist onboarding server-side when backend is wired.
-		throw redirect(303, '/home');
+
+		console.log('submitting form');
+		const cookieHeader = event.request.headers.get('cookie');
+		const payload = {
+			...form.data,
+			year: parseInt(form.data.year[0])
+		};
+
+		const res = await fetch(`${getApiOrigin()}/onboarding`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				cookie: cookieHeader || ''
+			},
+			body: JSON.stringify(toSnakeCaseKeys(payload))
+		});
+
+		if (res.ok) {
+			throw redirect(303, '/home');
+		} else {
+			const data = await res.json();
+			if (data?.message === 'onboarding_failed') {
+				// TODO: return "Something happened on our end with onboarding"
+			}
+
+			// TODO return "Something happened on our end"
+		}
 	}
 };

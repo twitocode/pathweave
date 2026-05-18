@@ -9,8 +9,8 @@ export const onboardingSchema = z.object({
 	onCampus: z.boolean().default(true),
 	lat: z.number().default(43.2614),
 	lng: z.number().default(-79.9198),
-	jobInfo: z.string().default(''),
-	futurePlans: z.string().default(''),
+	jobInfo: z.string().max(1000, 'Job info cannot exceed 1000 characters').default(''),
+	futurePlans: z.string().max(2000, 'Future plans cannot exceed 2000 characters').default(''),
 	professorQuality: z.coerce.number().min(1).max(3).default(2),
 	teachingStyle: z.coerce.number().min(1).max(3).default(2),
 	avoidedCourses: z.array(z.string()).default([])

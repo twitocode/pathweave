@@ -7,7 +7,7 @@ import (
 )
 
 func StringToTime(input string) pgtype.Time {
-	parsedTime, err := time.Parse("15:04:05", input)
+	parsedTime, err := time.Parse("15:04", input)
 	if err != nil {
 		panic(err)
 	}

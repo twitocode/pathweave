@@ -16,7 +16,21 @@ type authUserContextKey struct{}
 func RequireAuth(cfg *config.Config, svc *service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Dev-only auth bypass:
+			cookie, err := r.Cookie(service.SessionCookieName)
+			if err == nil && cookie.Value != "" {
+				user, refreshedCookie, err := svc.AuthenticateSession(r.Context(), cookie.Value)
+				if err == nil && user != nil {
+					if refreshedCookie != "" {
+						http.SetCookie(w, SessionCookie(refreshedCookie, r))
+					}
+
+					ctx := context.WithValue(r.Context(), authUserContextKey{}, user)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+			}
+
+			// Dev-only auth bypass fallback:
 			if cfg.DevBypassAuth && cfg.AppEnv != "production" {
 				user, err := svc.GetOrCreateUserByEmail(r.Context(), cfg.DevBypassAuthEmail)
 				if err != nil {
@@ -29,24 +43,7 @@ func RequireAuth(cfg *config.Config, svc *service.AuthService) func(http.Handler
 				return
 			}
 
-			cookie, err := r.Cookie(service.SessionCookieName)
-			if err != nil || cookie.Value == "" {
-				common.WriteError(w, http.StatusUnauthorized, "unauthorized")
-				return
-			}
-
-			user, refreshedCookie, err := svc.AuthenticateSession(r.Context(), cookie.Value)
-			if err != nil {
-				common.WriteError(w, http.StatusUnauthorized, "unauthorized")
-				return
-			}
-
-			if refreshedCookie != "" {
-				http.SetCookie(w, SessionCookie(refreshedCookie, r))
-			}
-
-			ctx := context.WithValue(r.Context(), authUserContextKey{}, user)
-			next.ServeHTTP(w, r.WithContext(ctx))
+			common.WriteError(w, http.StatusUnauthorized, "unauthorized")
 		})
 	}
 }
