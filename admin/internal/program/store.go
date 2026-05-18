@@ -36,6 +36,11 @@ func (s *Store) EnsureSchema(ctx context.Context) error {
 			ADD COLUMN IF NOT EXISTS requirement_level_id BIGINT REFERENCES program_requirement_level(id) ON DELETE CASCADE`,
 		`ALTER TABLE program_requirement_group
 			ADD COLUMN IF NOT EXISTS group_name TEXT`,
+		`CREATE TABLE IF NOT EXISTS program_antirequisites (
+			program_id BIGINT NOT NULL REFERENCES program(id) ON DELETE CASCADE,
+			course_id BIGINT NOT NULL REFERENCES course(id) ON DELETE CASCADE,
+			PRIMARY KEY (program_id, course_id)
+		)`,
 	}
 
 	for _, statement := range statements {
@@ -347,3 +352,168 @@ func normalizedSortOrder(value int, fallback int) int {
 	}
 	return fallback + 1
 }
+
+// --- Antirequisites ---
+
+type AntirequisiteCourse struct {
+	CourseID int64
+	Code     string
+	Name     string
+}
+
+type CourseRestriction struct {
+	CourseID     int64
+	Code         string
+	Restrictions string
+}
+
+func (s *Store) ListAntirequisites(ctx context.Context, programID int64) ([]AntirequisiteCourse, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT pa.course_id, c.code, c.name
+		 FROM program_antirequisites pa
+		 JOIN course c ON c.id = pa.course_id
+		 WHERE pa.program_id = $1
+		 ORDER BY c.code`, programID)
+	if err != nil {
+		return nil, fmt.Errorf("list antirequisites: %w", err)
+	}
+	defer rows.Close()
+
+	var items []AntirequisiteCourse
+	for rows.Next() {
+		var item AntirequisiteCourse
+		if err := rows.Scan(&item.CourseID, &item.Code, &item.Name); err != nil {
+			return nil, fmt.Errorf("scan antirequisite: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) AddAntirequisite(ctx context.Context, programID int64, courseCode string) error {
+	var courseID int64
+	err := s.pool.QueryRow(ctx, `SELECT id FROM course WHERE code = $1 LIMIT 1`, courseCode).Scan(&courseID)
+	if err != nil {
+		return fmt.Errorf("course %q not found: %w", courseCode, err)
+	}
+
+	_, err = s.pool.Exec(ctx,
+		`INSERT INTO program_antirequisites (program_id, course_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		programID, courseID)
+	if err != nil {
+		return fmt.Errorf("insert antirequisite: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) RemoveAntirequisite(ctx context.Context, programID int64, courseID int64) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM program_antirequisites WHERE program_id = $1 AND course_id = $2`,
+		programID, courseID)
+	if err != nil {
+		return fmt.Errorf("remove antirequisite: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ClearAntirequisites(ctx context.Context, programID int64) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM program_antirequisites WHERE program_id = $1`, programID)
+	return err
+}
+
+func (s *Store) GetRestrictionsForProgramCourses(ctx context.Context, programID int64) ([]CourseRestriction, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT c.id, c.code, c.restrictions
+		 FROM course c
+		 JOIN program_courses pc ON pc.course_id = c.id
+		 WHERE pc.program_id = $1 AND c.restrictions != ''`, programID)
+	if err != nil {
+		return nil, fmt.Errorf("get restrictions: %w", err)
+	}
+	defer rows.Close()
+
+	var items []CourseRestriction
+	for rows.Next() {
+		var item CourseRestriction
+		if err := rows.Scan(&item.CourseID, &item.Code, &item.Restrictions); err != nil {
+			return nil, fmt.Errorf("scan restriction: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// PopulateAntirequisites parses restrictions from all program courses and inserts antirequisites.
+// Returns the number inserted and any codes that couldn't be resolved.
+func (s *Store) PopulateAntirequisites(ctx context.Context, programID int64) (inserted int, skipped []string, err error) {
+	restrictions, err := s.GetRestrictionsForProgramCourses(ctx, programID)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	for _, r := range restrictions {
+		codes := ParseAntirequisites(r.Restrictions)
+		for _, code := range codes {
+			var courseID int64
+			lookupErr := s.pool.QueryRow(ctx,
+				`SELECT id FROM course WHERE code = $1 LIMIT 1`, code).Scan(&courseID)
+			if lookupErr != nil {
+				skipped = append(skipped, code)
+				continue
+			}
+
+			_, insertErr := s.pool.Exec(ctx,
+				`INSERT INTO program_antirequisites (program_id, course_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+				programID, courseID)
+			if insertErr != nil {
+				skipped = append(skipped, code)
+				continue
+			}
+			inserted++
+		}
+	}
+
+	return inserted, skipped, nil
+}
+
+// PopulateAllAntirequisites runs PopulateAntirequisites for all programs in the database.
+func (s *Store) PopulateAllAntirequisites(ctx context.Context) (inserted int, err error) {
+	programs, err := s.ListPrograms(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, p := range programs {
+		n, _, err := s.PopulateAntirequisites(ctx, p.ID)
+		if err != nil {
+			return inserted, fmt.Errorf("populate program %d: %w", p.ID, err)
+		}
+		inserted += n
+	}
+	return inserted, nil
+}
+
+// ListProgramsWithAntirequisites returns programs that have at least one antirequisite.
+func (s *Store) ListProgramsWithAntirequisites(ctx context.Context) ([]Summary, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT p.id, p.name 
+		 FROM program p
+		 JOIN program_antirequisites pa ON pa.program_id = p.id
+		 ORDER BY p.name`)
+	if err != nil {
+		return nil, fmt.Errorf("list programs with antirequisites: %w", err)
+	}
+	defer rows.Close()
+
+	programs := make([]Summary, 0)
+	for rows.Next() {
+		var program Summary
+		if err := rows.Scan(&program.ID, &program.Name); err != nil {
+			return nil, fmt.Errorf("scan program summary: %w", err)
+		}
+		programs = append(programs, program)
+	}
+	return programs, rows.Err()
+}
+

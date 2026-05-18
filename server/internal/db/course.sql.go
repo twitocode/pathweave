@@ -135,12 +135,16 @@ WHERE
     ($3::int  IS NULL OR c.level_number = $3)
     AND ($4::text  IS NULL OR c.term = $4)
     AND ($5::text  IS NULL OR c.code ILIKE $5 || '%')
+    AND NOT EXISTS (
+        SELECT 1 FROM user_detail_avoided_courses uac
+        WHERE uac.course_id = c.id AND uac.user_id = $6::uuid
+    )
 ORDER BY
     CASE WHEN $1::vector IS NULL 
         THEN (CASE WHEN pc.program_id IS NOT NULL THEN 0 ELSE 1 END)
         ELSE (c.embedding <=> $1::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
     END ASC
-LIMIT $6::int
+LIMIT $7::int
 `
 
 type GetCoursesByVectorSearchParams struct {
@@ -149,6 +153,7 @@ type GetCoursesByVectorSearchParams struct {
 	Level         pgtype.Int4
 	Term          pgtype.Text
 	Code          pgtype.Text
+	UserID        uuid.UUID
 	Limit         int32
 }
 
@@ -172,6 +177,7 @@ func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, arg GetCoursesBy
 		arg.Level,
 		arg.Term,
 		arg.Code,
+		arg.UserID,
 		arg.Limit,
 	)
 	if err != nil {

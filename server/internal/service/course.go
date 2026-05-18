@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pgvector/pgvector-go"
 	"github.com/twitocode/pathweave/go-api/internal/common"
@@ -218,7 +219,7 @@ func (cs *CourseService) VectorSearch(ctx context.Context, query string, user *d
 		}
 	}
 
-	res, err := cs.db.GetCoursesByVectorSearch(ctx, cs.BuildSearchParams(qMeta, embedding, programID))
+	res, err := cs.db.GetCoursesByVectorSearch(ctx, cs.BuildSearchParams(qMeta, embedding, programID, user.ID))
 
 	if err != nil {
 		return nil, err
@@ -232,10 +233,11 @@ func (cs *CourseService) VectorSearch(ctx context.Context, query string, user *d
 	return searchResults, nil
 }
 
-func (cs *CourseService) BuildSearchParams(m *QueryMetadata, embedding []float64, programID pgtype.Int8) db.GetCoursesByVectorSearchParams {
+func (cs *CourseService) BuildSearchParams(m *QueryMetadata, embedding []float64, programID pgtype.Int8, userID uuid.UUID) db.GetCoursesByVectorSearchParams {
 	p := db.GetCoursesByVectorSearchParams{
 		Limit:         5,
 		UserProgramID: programID,
+		UserID:        userID,
 	}
 
 	if len(embedding) > 0 {

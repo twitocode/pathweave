@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -33,12 +34,24 @@ type pageData struct {
 	Programs        []program.Summary
 	Selected        *program.EditableProgram
 	InitialLevelsJS template.JS
+	Antirequisites  []program.AntirequisiteCourse
+	ProgramID       int64
+	ReviewPrograms  []program.Summary
+	Restrictions    []program.CourseRestriction
 }
 
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", s.handleIndex)
 	mux.HandleFunc("GET /programs/edit", s.handleEditProgram)
 	mux.HandleFunc("POST /programs", s.handleSaveProgram)
+
+	// Antirequisite routes
+	mux.HandleFunc("POST /programs/antirequisites/populate", s.handlePopulateAntirequisites)
+	mux.HandleFunc("POST /programs/antirequisites/populate-all", s.handlePopulateAllAntirequisites)
+	mux.HandleFunc("POST /programs/antirequisites/add", s.handleAddAntirequisite)
+	mux.HandleFunc("POST /programs/antirequisites/remove", s.handleRemoveAntirequisite)
+	mux.HandleFunc("POST /programs/antirequisites/clear", s.handleClearAntirequisites)
+	mux.HandleFunc("GET /antirequisites", s.handleReviewAntirequisites)
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +82,8 @@ func (s *Server) handleEditProgram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	antireqs, _ := s.store.ListAntirequisites(r.Context(), id)
+
 	data, err := s.newPageData(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -76,6 +91,8 @@ func (s *Server) handleEditProgram(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Selected = &selected
 	data.InitialLevelsJS = levelsJS(selected.Levels)
+	data.Antirequisites = antireqs
+	data.ProgramID = id
 	s.render(w, "index.html", data)
 }
 
@@ -113,6 +130,145 @@ func (s *Server) handleSaveProgram(w http.ResponseWriter, r *http.Request) {
 	message := strings.Join(parts, " ")
 
 	s.renderResult(w, pageData{Message: message})
+}
+
+// --- Antirequisite Handlers ---
+
+func (s *Server) handlePopulateAntirequisites(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderResult(w, pageData{Error: "Could not parse form."})
+		return
+	}
+	programID, err := strconv.ParseInt(r.FormValue("program_id"), 10, 64)
+	if err != nil || programID <= 0 {
+		s.renderResult(w, pageData{Error: "Invalid program ID."})
+		return
+	}
+
+	inserted, skipped, err := s.store.PopulateAntirequisites(r.Context(), programID)
+	if err != nil {
+		s.renderResult(w, pageData{Error: "Populate failed: " + err.Error()})
+		return
+	}
+
+	msg := fmt.Sprintf("Populated %d antirequisite(s) from course restrictions.", inserted)
+	if len(skipped) > 0 {
+		msg += fmt.Sprintf(" Skipped %d code(s) not found in catalog: %s", len(skipped), strings.Join(skipped, ", "))
+	}
+
+	s.renderAntirequisiteResult(w, r, programID, msg, "")
+}
+
+func (s *Server) handlePopulateAllAntirequisites(w http.ResponseWriter, r *http.Request) {
+	inserted, err := s.store.PopulateAllAntirequisites(r.Context())
+	if err != nil {
+		s.renderResult(w, pageData{Error: "Failed to populate all: " + err.Error()})
+		return
+	}
+	s.renderResult(w, pageData{Message: fmt.Sprintf("Populated %d antirequisite(s) across all programs.", inserted)})
+}
+
+func (s *Server) handleReviewAntirequisites(w http.ResponseWriter, r *http.Request) {
+	programs, err := s.store.ListProgramsWithAntirequisites(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	data, err := s.newPageData(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data.ReviewPrograms = programs
+
+	// If a program is selected, load its antirequisites
+	if idStr := r.URL.Query().Get("id"); idStr != "" {
+		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil && id > 0 {
+			if selected, err := s.store.GetProgram(r.Context(), id); err == nil {
+				data.Selected = &selected
+				data.ProgramID = id
+				data.Antirequisites, _ = s.store.ListAntirequisites(r.Context(), id)
+				data.Restrictions, _ = s.store.GetRestrictionsForProgramCourses(r.Context(), id)
+			}
+		}
+	}
+
+	s.render(w, "review.html", data)
+}
+
+func (s *Server) handleAddAntirequisite(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderResult(w, pageData{Error: "Could not parse form."})
+		return
+	}
+	programID, _ := strconv.ParseInt(r.FormValue("program_id"), 10, 64)
+	courseCode := strings.TrimSpace(strings.ToUpper(r.FormValue("course_code")))
+
+	if programID <= 0 || courseCode == "" {
+		s.renderAntirequisiteResult(w, r, programID, "", "Program ID and course code are required.")
+		return
+	}
+
+	if err := s.store.AddAntirequisite(r.Context(), programID, courseCode); err != nil {
+		s.renderAntirequisiteResult(w, r, programID, "", "Could not add: "+err.Error())
+		return
+	}
+
+	s.renderAntirequisiteResult(w, r, programID, fmt.Sprintf("Added %s as antirequisite.", courseCode), "")
+}
+
+func (s *Server) handleRemoveAntirequisite(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderResult(w, pageData{Error: "Could not parse form."})
+		return
+	}
+	programID, _ := strconv.ParseInt(r.FormValue("program_id"), 10, 64)
+	courseID, _ := strconv.ParseInt(r.FormValue("course_id"), 10, 64)
+
+	if programID <= 0 || courseID <= 0 {
+		s.renderResult(w, pageData{Error: "Invalid IDs."})
+		return
+	}
+
+	if err := s.store.RemoveAntirequisite(r.Context(), programID, courseID); err != nil {
+		s.renderAntirequisiteResult(w, r, programID, "", "Remove failed: "+err.Error())
+		return
+	}
+
+	s.renderAntirequisiteResult(w, r, programID, "Removed antirequisite.", "")
+}
+
+func (s *Server) handleClearAntirequisites(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.renderResult(w, pageData{Error: "Could not parse form."})
+		return
+	}
+	programID, _ := strconv.ParseInt(r.FormValue("program_id"), 10, 64)
+	if programID <= 0 {
+		s.renderResult(w, pageData{Error: "Invalid program ID."})
+		return
+	}
+
+	if err := s.store.ClearAntirequisites(r.Context(), programID); err != nil {
+		s.renderAntirequisiteResult(w, r, programID, "", "Clear failed: "+err.Error())
+		return
+	}
+
+	s.renderAntirequisiteResult(w, r, programID, "Cleared all antirequisites.", "")
+}
+
+func (s *Server) renderAntirequisiteResult(w http.ResponseWriter, r *http.Request, programID int64, message, errMsg string) {
+	antireqs, _ := s.store.ListAntirequisites(r.Context(), programID)
+
+	data := pageData{
+		Message:        message,
+		Error:          errMsg,
+		Antirequisites: antireqs,
+		ProgramID:      programID,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	s.render(w, "antirequisites_panel.html", data)
 }
 
 func (s *Server) renderResult(w http.ResponseWriter, data pageData) {

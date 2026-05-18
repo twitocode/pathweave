@@ -50,6 +50,10 @@ WHERE
     (sqlc.narg('level')::int  IS NULL OR c.level_number = sqlc.narg('level'))
     AND (sqlc.narg('term')::text  IS NULL OR c.term = sqlc.narg('term'))
     AND (sqlc.narg('code')::text  IS NULL OR c.code ILIKE sqlc.narg('code') || '%')
+    AND NOT EXISTS (
+        SELECT 1 FROM user_detail_avoided_courses uac
+        WHERE uac.course_id = c.id AND uac.user_id = sqlc.arg('user_id')::uuid
+    )
 ORDER BY
     CASE WHEN sqlc.narg('embedding')::vector IS NULL 
         THEN (CASE WHEN pc.program_id IS NOT NULL THEN 0 ELSE 1 END)
