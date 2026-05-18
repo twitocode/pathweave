@@ -16,18 +16,22 @@ type Services struct {
 	Program    *service.ProgramService
 	Course     *service.CourseService
 	Embedding  *service.EmbeddingService
+	AI         *service.AIService
 }
 
 func NewServices(cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger) *Services {
 	queries := db.New(pool)
 
-  es := service.NewEmbeddingService(cfg, queries, log, pool)
+	es := service.NewEmbeddingService(cfg, queries, log)
+  ais := service.NewAIService(cfg, queries, log)
+  
 	return &Services{
 		Auth:       service.NewAuthService(cfg, queries, log),
 		User:       service.NewUserService(queries, log),
 		Onboarding: service.NewOnboardingService(queries, log),
-		Course:     service.NewCourseService(queries, log, es),
+		Course:     service.NewCourseService(queries, log, es, ais),
 		Program:    service.NewProgramService(queries, log),
 		Embedding:  es,
+		AI:         ais,
 	}
 }

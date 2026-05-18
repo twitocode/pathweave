@@ -16,6 +16,7 @@ type CourseService struct {
 	db  *db.Queries
 	log *zap.Logger
 	es  *EmbeddingService
+	ais *AIService
 }
 
 type CourseInfo struct {
@@ -46,9 +47,9 @@ type Schedule struct {
 	StudentSentiment string  `json:"student_sentiment"`
 }
 
-func NewCourseService(queries *db.Queries, log *zap.Logger, es *EmbeddingService) *CourseService {
+func NewCourseService(queries *db.Queries, log *zap.Logger, es *EmbeddingService, ais *AIService) *CourseService {
 	return &CourseService{
-		db: queries, log: log, es: es,
+		db: queries, log: log, es: es, ais: ais,
 	}
 }
 
@@ -135,7 +136,7 @@ func (cs *CourseService) CreateCourseEmbeddingsBatched(ctx context.Context, code
 			continue
 		}
 
-		embeddingString := fmt.Sprintf("course_code: %s, course_name: %s, description: %s, available in the %s term, is a level %d course", info.Code, info.Name, info.Description, info.Term, info.LevelNumber)
+		embeddingString := fmt.Sprintf("[Code]: %s, [Name]: %s, [Description]: %s, [Term]: %s, [Level]: %d", info.Code, info.Name, info.Description, info.Term, info.LevelNumber)
 		embeddingStrings = append(embeddingStrings, embeddingString)
 		validCodes = append(validCodes, code)
 	}
@@ -196,6 +197,7 @@ func (cs *CourseService) CreateEmbeddingForEveryCourse(ctx context.Context) {
 }
 
 func (cs *CourseService) VectorSearch(ctx context.Context, query string) ([]*CourseInfo, error) {
+	cs.ais.SearchQueryToJson(ctx, query)
 	embedding, err := cs.es.CreateEmbedding(ctx, query)
 	if err != nil {
 		return nil, err

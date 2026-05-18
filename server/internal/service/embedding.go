@@ -5,7 +5,6 @@ import (
 
 	openrouter "github.com/OpenRouterTeam/go-sdk"
 	"github.com/OpenRouterTeam/go-sdk/models/operations"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twitocode/pathweave/go-api/internal/config"
 	"github.com/twitocode/pathweave/go-api/internal/db"
 	"go.uber.org/zap"
@@ -14,17 +13,15 @@ import (
 type EmbeddingService struct {
 	log    *zap.Logger
 	db     *db.Queries
-	pool   *pgxpool.Pool
 	cfg    *config.Config
 	router *openrouter.OpenRouter
 }
 
-func NewEmbeddingService(cfg *config.Config, queries *db.Queries, log *zap.Logger, pool *pgxpool.Pool) *EmbeddingService {
+func NewEmbeddingService(cfg *config.Config, queries *db.Queries, log *zap.Logger) *EmbeddingService {
 	return &EmbeddingService{
-		log:  log,
-		db:   queries,
-		pool: pool,
-		cfg:  cfg,
+		log: log,
+		db:  queries,
+		cfg: cfg,
 		router: openrouter.New(
 			openrouter.WithSecurity(cfg.OpenRouterAPIKey),
 		),
@@ -88,5 +85,3 @@ func (es *EmbeddingService) CreateEmbeddingBatched(ctx context.Context, data []s
 
 	return nil, nil
 }
-
-
