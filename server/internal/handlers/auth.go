@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -22,12 +23,17 @@ func HandleLogin(svc *service.AuthService) http.HandlerFunc {
 			return
 		}
 
-		url, err := svc.LoginURL()
+		url, codeVerifier, err := svc.LoginURL()
 		if err != nil {
 			log.Warn("auth login URL failed", zap.Error(err))
 			common.WriteError(w, http.StatusBadGateway, "Failed to generate login URL")
 			return
 		}
+
+		if codeVerifier != "" {
+			http.SetCookie(w, middleware.PKCECookie(codeVerifier, r))
+		}
+
 		http.Redirect(w, r, url, http.StatusFound)
 	}
 }
@@ -48,19 +54,37 @@ func HandleCallback(cfg *config.Config, svc *service.AuthService) http.HandlerFu
 			return
 		}
 
-		sealedSession, _, err := svc.AuthenticateWithCode(r.Context(), code)
+		var codeVerifier string
+		if cookie, err := r.Cookie(service.PKCECookieName); err == nil {
+			codeVerifier = cookie.Value
+		}
+
+		sealedSession, user, err := svc.AuthenticateWithCode(r.Context(), code, codeVerifier)
 		if err != nil {
 			log.Warn("auth callback exchange failed", zap.Error(err))
 			http.Redirect(w, r, authErrorRedirect(cfg.FrontendAppURL, "auth_failed"), http.StatusFound)
 			return
 		}
 
+		// Clear PKCE cookie
+		pkceCookie := middleware.PKCECookie("", r)
+		pkceCookie.MaxAge = -1
+		http.SetCookie(w, pkceCookie)
+
+		onboardingState, err := svc.GetOnboardingState(r.Context(), &user)
+		if err != nil {
+			log.Warn("onboarding checkfailed", zap.Error(err))
+			http.Redirect(w, r, authErrorRedirect(cfg.FrontendAppURL, "auth_failed"), http.StatusFound)
+			return
+		}
+
+		redirectUri := fmt.Sprintf("%s/home?onboarded=%t", cfg.FrontendAppURL, onboardingState)
 		http.SetCookie(w, middleware.SessionCookie(sealedSession, r))
-		http.Redirect(w, r, cfg.FrontendAppURL, http.StatusFound)
+		http.Redirect(w, r, redirectUri, http.StatusFound)
 	}
 }
 
-func HandleMe() http.HandlerFunc {
+func HandleMe(svc *service.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := middleware.Logger(r)
 		user, ok := middleware.UserFromContext(r.Context())
@@ -70,10 +94,14 @@ func HandleMe() http.HandlerFunc {
 			return
 		}
 
-		common.WriteJSON(w, http.StatusOK, map[string]any{
-			"id":    user.ID,
-			"email": user.Email,
-		})
+		me, err := svc.GetMe(r.Context(), user)
+		if err != nil {
+			log.Warn("auth me failed to get profile", zap.Error(err))
+			common.WriteError(w, http.StatusInternalServerError, "failed to get profile")
+			return
+		}
+
+		common.WriteJSON(w, http.StatusOK, me)
 	}
 }
 

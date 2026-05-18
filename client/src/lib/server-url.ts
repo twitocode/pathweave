@@ -1,15 +1,17 @@
-/**
- * FastAPI backend origin used for auth redirects.
- * Set NEXT_PUBLIC_API_ORIGIN in `.env.local` if API is not on localhost:8000.
- */
+const DEFAULT_API_ORIGIN = 'http://localhost:8000';
+
+function trimTrailingSlash(value: string): string {
+	return value.replace(/\/+$/, '');
+}
+
 export function getApiOrigin(): string {
-  const raw =
-    typeof process.env.NEXT_PUBLIC_API_ORIGIN === "string"
-      ? process.env.NEXT_PUBLIC_API_ORIGIN.trim()
-      : "";
-  return raw.length > 0 ? raw.replace(/\/$/, "") : "http://localhost:8000";
+	return trimTrailingSlash(import.meta.env.PUBLIC_API_ORIGIN || DEFAULT_API_ORIGIN);
 }
 
 export function getAuthLoginHref(): string {
-  return `${getApiOrigin()}/auth/login`;
+	return `${getApiOrigin()}/auth/login`;
+}
+
+export function getAuthMeHref(): string {
+	return `${getApiOrigin()}/auth/me`;
 }

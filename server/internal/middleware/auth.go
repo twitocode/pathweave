@@ -88,3 +88,16 @@ func SessionCookie(value string, r *http.Request) *http.Cookie {
 		Path:     "/",
 	}
 }
+
+// PKCECookie builds the PKCE verifier cookie.
+func PKCECookie(value string, r *http.Request) *http.Cookie {
+	return &http.Cookie{
+		Name:     service.PKCECookieName,
+		Value:    value,
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+		MaxAge:   300, // 5 minutes
+	}
+}

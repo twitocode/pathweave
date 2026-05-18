@@ -13,6 +13,7 @@ import (
 )
 
 const SessionCookieName = "wos_session"
+const PKCECookieName = "wos_pkce"
 
 var (
 	ErrNoSession    = errors.New("no session cookie provided")
@@ -23,7 +24,7 @@ type AuthService struct {
 	cfg          *config.Config
 	client       *workos.Client
 	publicClient *workos.PublicClient
-	queries      *db.Queries
+	db           *db.Queries
 	log          *zap.Logger
 }
 
@@ -34,12 +35,12 @@ func NewAuthService(cfg *config.Config, queries *db.Queries, log *zap.Logger) *A
 		cfg:          cfg,
 		client:       client,
 		publicClient: publicClient,
-		queries:      queries,
+		db:           queries,
 		log:          log,
 	}
 }
 
-func (s *AuthService) LoginURL() (string, error) {
+func (s *AuthService) LoginURL() (string, string, error) {
 	provider := "GoogleOAuth"
 	result, err := s.publicClient.GetAuthorizationURL(workos.AuthKitAuthorizationURLParams{
 		RedirectURI: s.cfg.WorkOSRedirectURI,
@@ -47,15 +48,20 @@ func (s *AuthService) LoginURL() (string, error) {
 		ClientID:    s.cfg.WorkOSClientID,
 	})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return result.URL, nil
+	return result.URL, result.CodeVerifier, nil
 }
 
-func (s *AuthService) AuthenticateWithCode(ctx context.Context, code string) (sealedSession string, user db.User, err error) {
-	authResponse, err := s.client.UserManagement().AuthenticateWithCode(ctx, &workos.UserManagementAuthenticateWithCodeParams{
+func (s *AuthService) AuthenticateWithCode(ctx context.Context, code, codeVerifier string) (sealedSession string, user db.User, err error) {
+	params := &workos.UserManagementAuthenticateWithCodeParams{
 		Code: code,
-	})
+	}
+	if codeVerifier != "" {
+		params.CodeVerifier = &codeVerifier
+	}
+
+	authResponse, err := s.client.UserManagement().AuthenticateWithCode(ctx, params)
 	if err != nil {
 		return "", db.User{}, err
 	}
@@ -135,12 +141,34 @@ func (s *AuthService) AuthenticateSession(ctx context.Context, sealedSession str
 }
 
 func (s *AuthService) GetOrCreateUserByEmail(ctx context.Context, email string) (db.User, error) {
-	user, err := s.queries.GetUserByEmail(ctx, email)
+	user, err := s.db.GetUserByEmail(ctx, email)
 	if err == nil {
 		return user, nil
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return s.queries.CreateUser(ctx, email)
+		return s.db.CreateUser(ctx, email)
 	}
 	return db.User{}, err
+}
+
+func (s *AuthService) GetOnboardingState(ctx context.Context, user *db.User) (bool, error) {
+	exists, err := s.db.HasCompletedOnboarding(ctx, user.ID)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (s *AuthService) GetMe(ctx context.Context, user *db.User) (map[string]any, error) {
+	onboarded, err := s.GetOnboardingState(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"id":        user.ID,
+		"email":     user.Email,
+		"onboarded": onboarded,
+	}, nil
 }
