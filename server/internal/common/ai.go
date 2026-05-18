@@ -1,5 +1,7 @@
 package common
 
+import "strings"
+
 var QuerySystemPrompt string = `
 You are an intelligent search assistant for a university course catalog.
    Your job is to analyze a student's search query and extract any strict filters (metadata)
@@ -54,3 +56,15 @@ You are an intelligent search assistant for a university course catalog.
      "course_code": null
    }
 `
+
+func ExtractJSON(s string) string {
+    // strip ```json ... ``` or ``` ... ```
+    s = strings.TrimSpace(s)
+    if i := strings.Index(s, "{"); i > 0 {
+        s = s[i:]
+    }
+    if i := strings.LastIndex(s, "}"); i >= 0 {
+        s = s[:i+1]
+    }
+    return s
+}

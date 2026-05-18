@@ -67,6 +67,8 @@ func HandleCreateAllCourseEmbeddings(cs *service.CourseService) http.HandlerFunc
 func HandleVectorSearchCourse(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := middleware.Logger(r)
+    user, _ := middleware.UserFromContext(r.Context())
+
 		query := r.URL.Query().Get("q")
 
 		if query == "" {
@@ -74,7 +76,7 @@ func HandleVectorSearchCourse(cs *service.CourseService) http.HandlerFunc {
 			common.WriteError(w, http.StatusBadRequest, "search query not provided")
 		}
 
-		results, err := cs.VectorSearch(r.Context(), query)
+		results, err := cs.VectorSearch(r.Context(), query, user)
 		if err != nil {
 			common.WriteError(w, http.StatusInternalServerError, "could not query courses")
 			log.Error("could not vector search courses", zap.String("query", query), zap.Error(err))

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pgvector/pgvector-go"
 	"github.com/twitocode/pathweave/go-api/internal/common"
 	"github.com/twitocode/pathweave/go-api/internal/db"
@@ -136,7 +137,7 @@ func (cs *CourseService) CreateCourseEmbeddingsBatched(ctx context.Context, code
 			continue
 		}
 
-		embeddingString := fmt.Sprintf("[Code]: %s, [Name]: %s, [Description]: %s, [Term]: %s, [Level]: %d", info.Code, info.Name, info.Description, info.Term, info.LevelNumber)
+		embeddingString := fmt.Sprintf("[Code]: %s, [Name]: %s, [Description]: %s", info.Code, info.Name, info.Description)
 		embeddingStrings = append(embeddingStrings, embeddingString)
 		validCodes = append(validCodes, code)
 	}
@@ -196,21 +197,62 @@ func (cs *CourseService) CreateEmbeddingForEveryCourse(ctx context.Context) {
 	}
 }
 
-func (cs *CourseService) VectorSearch(ctx context.Context, query string) ([]*CourseInfo, error) {
-	cs.ais.SearchQueryToJson(ctx, query)
-	embedding, err := cs.es.CreateEmbedding(ctx, query)
+func (cs *CourseService) VectorSearch(ctx context.Context, query string, user *db.User) ([]*CourseInfo, error) {
+	programID, err := cs.db.GetUserProgramID(ctx, user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := cs.db.GetCoursesByVectorSearch(ctx, pgvector.NewVector(common.Float64ToFloat32Slice(embedding)))
+	qMeta, err := cs.ais.SearchQueryToJson(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+
+	cs.log.Debug("jsonified query", zap.Any("res", qMeta))
+
+	var embedding []float64
+	if qMeta.Query != "" {
+		embedding, err = cs.es.CreateEmbedding(ctx, qMeta.Query)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	res, err := cs.db.GetCoursesByVectorSearch(ctx, cs.BuildSearchParams(qMeta, embedding, programID))
+
+	if err != nil {
+		return nil, err
+	}
+	cs.log.Debug("search results", zap.Any("res", res))
 
 	searchResults := make([]*CourseInfo, len(res))
 	for i, course := range res {
 		searchResults[i] = cs.formatCourseInfo(course)
 	}
 	return searchResults, nil
+}
+
+func (cs *CourseService) BuildSearchParams(m *QueryMetadata, embedding []float64, programID pgtype.Int8) db.GetCoursesByVectorSearchParams {
+	p := db.GetCoursesByVectorSearchParams{
+		Limit:         5,
+		UserProgramID: programID,
+	}
+
+	if len(embedding) > 0 {
+		p.Embedding = pgvector.NewVector(common.Float64ToFloat32Slice(embedding))
+	} else {
+		p.Embedding = pgvector.Vector{}
+	}
+
+	if m.Level != nil {
+		p.Level = pgtype.Int4{Int32: int32(*m.Level), Valid: true}
+	}
+	if m.Term != nil {
+		p.Term = pgtype.Text{String: *m.Term, Valid: true}
+	}
+	if m.Code != nil {
+		p.Code = pgtype.Text{String: *m.Code, Valid: true}
+	}
+
+	return p
 }

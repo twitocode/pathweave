@@ -2,11 +2,11 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"errors"
 
-	openrouter "github.com/OpenRouterTeam/go-sdk"
-	"github.com/OpenRouterTeam/go-sdk/models/components"
-	"github.com/OpenRouterTeam/go-sdk/optionalnullable"
+	openrouter "github.com/revrost/go-openrouter"
+
 	"github.com/twitocode/pathweave/go-api/internal/common"
 	"github.com/twitocode/pathweave/go-api/internal/config"
 	"github.com/twitocode/pathweave/go-api/internal/db"
@@ -17,7 +17,7 @@ type AIService struct {
 	log    *zap.Logger
 	db     *db.Queries
 	cfg    *config.Config
-	router *openrouter.OpenRouter
+	router *openrouter.Client
 }
 
 func NewAIService(cfg *config.Config, queries *db.Queries, log *zap.Logger) *AIService {
@@ -25,50 +25,45 @@ func NewAIService(cfg *config.Config, queries *db.Queries, log *zap.Logger) *AIS
 		log: log,
 		db:  queries,
 		cfg: cfg,
-		router: openrouter.New(
-			openrouter.WithSecurity(cfg.OpenRouterAPIKey),
+		router: openrouter.NewClient(
+			cfg.OpenRouterAPIKey,
 		),
 	}
 }
 
-func (ais *AIService) SearchQueryToJson(ctx context.Context, query string) (map[string]any, error) {
-	res, err := ais.router.Chat.Send(ctx, components.ChatRequest{
-		MaxTokens: optionalnullable.From(openrouter.Pointer[int64](200)),
-		Messages: []components.ChatMessages{
-			components.CreateChatMessagesSystem(
-				components.ChatSystemMessage{
-					Content: components.CreateChatSystemMessageContentStr(
-						common.QuerySystemPrompt,
-					),
-					Role: components.ChatSystemMessageRoleSystem,
-				},
-			),
-			{
-				ChatUserMessage: &components.ChatUserMessage{
-					Content: components.ChatUserMessageContent{
-						Str: openrouter.String(query),
-					},
-				},
+type QueryMetadata struct {
+	Query string  `json:"query"`
+	Level *int    `json:"level"`
+	Term  *string `json:"term"`
+	Unit  *string `json:"unit"`
+	Code  *string `json:"code"`
+}
+
+func (ais *AIService) SearchQueryToJson(ctx context.Context, query string) (*QueryMetadata, error) {
+	resp, err := ais.router.CreateChatCompletion(
+		ctx,
+		openrouter.ChatCompletionRequest{
+			Model: "google/gemini-2.5-flash-lite",
+			Messages: []openrouter.ChatCompletionMessage{
+				openrouter.SystemMessage(common.QuerySystemPrompt),
+				openrouter.UserMessage(query),
 			},
 		},
-		Model:       openrouter.Pointer("deepseek/deepseek-v4-flash"),
-		Temperature: optionalnullable.From(new(0.7)),
-	})
+	)
+
 	if err != nil {
 		return nil, err
 	}
-
-	if res != nil && len(res.ChatResult.Choices) > 0 {
-		message := res.ChatResult.Choices[0].Message
-
-		if content, ok := message.Content.Get(); ok {
-			// Content is a ChatAssistantMessageContent union —
-			// check which variant is set
-			if content.Str != nil {
-				fmt.Println(*content.Str)
-			}
-		}
+	if len(resp.Choices) == 0 {
+		return nil, errors.New("no choices returned from model")
 	}
 
-	return nil, nil
+	var data QueryMetadata
+	responseText := resp.Choices[0].Message.Content.Text
+  ais.log.Debug("ai response",zap.String("res",responseText))
+	if err := json.Unmarshal([]byte(common.ExtractJSON(responseText)), &data); err != nil {
+		return nil, err
+	}
+
+	return &data, nil
 }

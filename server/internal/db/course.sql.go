@@ -124,11 +124,33 @@ func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, er
 }
 
 const getCoursesByVectorSearch = `-- name: GetCoursesByVectorSearch :many
-SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number 
-FROM course 
-ORDER BY embedding <=> $1 
-LIMIT 5
+SELECT 
+    c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.term, c.level_number,
+    c.embedding <=> $1::vector AS distance
+FROM course c
+LEFT JOIN program_courses pc 
+    ON pc.course_id = c.id 
+    AND pc.program_id = $2::bigint
+WHERE
+    ($3::int  IS NULL OR c.level_number = $3)
+    AND ($4::text  IS NULL OR c.term = $4)
+    AND ($5::text  IS NULL OR c.code ILIKE $5 || '%')
+ORDER BY
+    CASE WHEN $1::vector IS NULL 
+        THEN (CASE WHEN pc.program_id IS NOT NULL THEN 0 ELSE 1 END)
+        ELSE (c.embedding <=> $1::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
+    END ASC
+LIMIT $6::int
 `
+
+type GetCoursesByVectorSearchParams struct {
+	Embedding     pgvector.Vector
+	UserProgramID pgtype.Int8
+	Level         pgtype.Int4
+	Term          pgtype.Text
+	Code          pgtype.Text
+	Limit         int32
+}
 
 type GetCoursesByVectorSearchRow struct {
 	ID            int64
@@ -140,10 +162,18 @@ type GetCoursesByVectorSearchRow struct {
 	Units         int32
 	Term          string
 	LevelNumber   pgtype.Int4
+	Distance      interface{}
 }
 
-func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, embedding pgvector.Vector) ([]GetCoursesByVectorSearchRow, error) {
-	rows, err := q.db.Query(ctx, getCoursesByVectorSearch, embedding)
+func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, arg GetCoursesByVectorSearchParams) ([]GetCoursesByVectorSearchRow, error) {
+	rows, err := q.db.Query(ctx, getCoursesByVectorSearch,
+		arg.Embedding,
+		arg.UserProgramID,
+		arg.Level,
+		arg.Term,
+		arg.Code,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +191,7 @@ func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, embedding pgvect
 			&i.Units,
 			&i.Term,
 			&i.LevelNumber,
+			&i.Distance,
 		); err != nil {
 			return nil, err
 		}
