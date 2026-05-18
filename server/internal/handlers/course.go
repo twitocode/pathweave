@@ -56,3 +56,10 @@ course_id, err := strconv.Atoi(id)
 		common.WriteJSON(w, http.StatusOK, schedules)
 	}
 }
+
+func HandleCreateAllCourseEmbeddings(cs *service.CourseService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+    cs.CreateEmbeddingForEveryCourse(r.Context())
+		common.WriteJSON(w, http.StatusOK, "done")
+	}
+}

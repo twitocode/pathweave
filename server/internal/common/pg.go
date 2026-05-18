@@ -34,3 +34,11 @@ func NumericToFloat64(pn pgtype.Numeric) float64 {
 
 	return f8.Float64
 }
+
+func Float64ToFloat32Slice(in []float64) []float32 {
+    out := make([]float32, len(in))
+    for i, v := range in {
+        out[i] = float32(v)
+    }
+    return out
+}

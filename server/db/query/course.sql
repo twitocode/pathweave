@@ -15,7 +15,7 @@ WHERE code = $1
 LIMIT 1;
 
 -- name: GetCourseByCode :one
-SELECT * 
+SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number
 FROM course
 WHERE code = $1
 LIMIT 1;
@@ -32,3 +32,9 @@ ORDER BY sc.section;
 UPDATE course
 SET embedding = $2
 WHERE code = $1;
+
+-- name: GetAllCourseCodes :one
+SELECT array_agg(code)::varchar[]
+FROM course;
+
+

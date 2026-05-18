@@ -21,12 +21,13 @@ type Services struct {
 func NewServices(cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger) *Services {
 	queries := db.New(pool)
 
+  es := service.NewEmbeddingService(cfg, queries, log, pool)
 	return &Services{
 		Auth:       service.NewAuthService(cfg, queries, log),
 		User:       service.NewUserService(queries, log),
 		Onboarding: service.NewOnboardingService(queries, log),
-		Course:     service.NewCourseService(queries, log),
+		Course:     service.NewCourseService(queries, log, es),
 		Program:    service.NewProgramService(queries, log),
-		Embedding:  service.NewEmbeddingService(queries, log, pool),
+		Embedding:  es,
 	}
 }

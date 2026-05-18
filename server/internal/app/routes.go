@@ -44,6 +44,7 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 
 		r.Get("/{code}", handlers.HandleGetCourseByCode(s.Course))
 		r.Get("/{course_id}/schedules", handlers.HandleGetSchedulesForCourse(s.Course))
+		r.Post("/embeddings", handlers.HandleCreateAllCourseEmbeddings(s.Course))
 	})
 
 	r.With(mw.RequireCSRF(cfg.SecretKey)).Post("/logout", handlers.HandleLogout(cfg, s.Auth))

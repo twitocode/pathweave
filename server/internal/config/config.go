@@ -21,9 +21,9 @@ type Config struct {
 	InternalServiceToken string
 	PythonAIBaseURL      string
 	AllowedOrigins       []string
-
-	DevBypassAuth      bool
-	DevBypassAuthEmail string
+	OpenRouterAPIKey     string
+	DevBypassAuth        bool
+	DevBypassAuthEmail   string
 }
 
 func New(getenv func(string) string) *Config {
@@ -57,6 +57,7 @@ func New(getenv func(string) string) *Config {
 		WorkOSRedirectURI:    getenv("WORKOS_REDIRECT_URI"),
 		SecretKey:            getenv("SECRET_KEY"),
 		InternalServiceToken: getenv("INTERNAL_SERVICE_TOKEN"),
+		OpenRouterAPIKey:     getenv("OPENROUTER_API_KEY"),
 		PythonAIBaseURL:      strings.TrimRight(getenv("PYTHON_AI_BASE_URL"), "/"),
 		AllowedOrigins:       allowedOrigins,
 		DevBypassAuth:        devBypassAuth,

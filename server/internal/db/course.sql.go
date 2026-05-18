@@ -61,16 +61,40 @@ func (q *Queries) CreateEmbedding(ctx context.Context, arg CreateEmbeddingParams
 	return err
 }
 
+const getAllCourseCodes = `-- name: GetAllCourseCodes :one
+SELECT array_agg(code)::varchar[]
+FROM course
+`
+
+func (q *Queries) GetAllCourseCodes(ctx context.Context) ([]string, error) {
+	row := q.db.QueryRow(ctx, getAllCourseCodes)
+	var column_1 []string
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getCourseByCode = `-- name: GetCourseByCode :one
-SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number, embedding 
+SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number
 FROM course
 WHERE code = $1
 LIMIT 1
 `
 
-func (q *Queries) GetCourseByCode(ctx context.Context, code string) (Course, error) {
+type GetCourseByCodeRow struct {
+	ID            int64
+	Code          string
+	Name          string
+	Description   string
+	Restrictions  string
+	Prerequisites []string
+	Units         int32
+	Term          string
+	LevelNumber   pgtype.Int4
+}
+
+func (q *Queries) GetCourseByCode(ctx context.Context, code string) (GetCourseByCodeRow, error) {
 	row := q.db.QueryRow(ctx, getCourseByCode, code)
-	var i Course
+	var i GetCourseByCodeRow
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
@@ -81,7 +105,6 @@ func (q *Queries) GetCourseByCode(ctx context.Context, code string) (Course, err
 		&i.Units,
 		&i.Term,
 		&i.LevelNumber,
-		&i.Embedding,
 	)
 	return i, err
 }
