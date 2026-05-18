@@ -101,27 +101,43 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) ([]*Sch
 	return schedules, nil
 }
 
-func (cs *CourseService) CreateCourseEmbeddings(ctx context.Context, code string) error {
-	info, err := cs.GetCourseInfo(ctx, code)
+func (cs *CourseService) CreateCourseEmbeddingsBatched(ctx context.Context, codes []string) error {
+	var embeddingStrings []string
+	var validCodes []string
+
+	for _, code := range codes {
+		info, err := cs.GetCourseInfo(ctx, code)
+		if err != nil {
+			cs.log.Warn("could not get info for course", zap.String("code", code), zap.Error(err))
+			continue
+		}
+
+		embeddingString := fmt.Sprintf("course_code: %s, course_name: %s, description: %s, available in the %s term, is a level %d course", info.Code, info.Name, info.Description, info.Term, info.LevelNumber)
+		embeddingStrings = append(embeddingStrings, embeddingString)
+		validCodes = append(validCodes, code)
+	}
+
+	if len(embeddingStrings) == 0 {
+		return nil
+	}
+
+	embeddings, err := cs.es.CreateEmbeddingBatched(ctx, embeddingStrings)
 	if err != nil {
 		return err
 	}
 
-	embeddingString := fmt.Sprintf("course_code: %s, course_name: %s, description: %s, available in the %s term, is a level %d course", info.Code, info.Name, info.Description, info.Term, info.LevelNumber)
-
-	embeddingArray, err := cs.es.CreateEmbedding(ctx, embeddingString)
-	if err != nil {
-		return err
+	if len(embeddings) != len(validCodes) {
+		return fmt.Errorf("embedding count mismatch: expected %d, got %d", len(validCodes), len(embeddings))
 	}
 
-	err = cs.db.CreateEmbedding(ctx, db.CreateEmbeddingParams{
-		Code:      code,
-		Embedding: pgvector.NewVector(common.Float64ToFloat32Slice(embeddingArray)),
-	})
-
-	if err != nil {
-
-		return err
+	for i, embeddingArray := range embeddings {
+		err = cs.db.CreateEmbedding(ctx, db.CreateEmbeddingParams{
+			Code:      validCodes[i],
+			Embedding: pgvector.NewVector(common.Float64ToFloat32Slice(embeddingArray)),
+		})
+		if err != nil {
+			cs.log.Error("could not save embedding to db", zap.String("code", validCodes[i]), zap.Error(err))
+		}
 	}
 	return nil
 }
@@ -133,19 +149,25 @@ func (cs *CourseService) CreateEmbeddingForEveryCourse(ctx context.Context) {
 		return
 	}
 
+	batchSize := 50 //per api call
 	g, gCtx := errgroup.WithContext(ctx)
-	for i, code := range courseCodes {
-		if i == 10 {
-			break
+
+	for i := 0; i < len(courseCodes); i += batchSize {
+		end := i + batchSize
+		if end > len(courseCodes) {
+			end = len(courseCodes)
 		}
+		
+		batch := courseCodes[i:end]
+		
 		g.Go(func() error {
-			return cs.CreateCourseEmbeddings(gCtx, code)
+			return cs.CreateCourseEmbeddingsBatched(gCtx, batch)
 		})
 	}
 
 	if err := g.Wait(); err != nil {
-		cs.log.Error("Something failed: %v\n", zap.Error(err))
+		cs.log.Error("Something failed while creating embeddings", zap.Error(err))
 	} else {
-		cs.log.Info("Everything succeeded!")
+		cs.log.Info("Successfully created embeddings for all courses!")
 	}
 }
