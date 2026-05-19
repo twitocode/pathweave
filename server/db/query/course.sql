@@ -41,7 +41,10 @@ FROM course;
 -- name: GetCoursesByVectorSearch :many
 SELECT 
     c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.term, c.level_number,
-    c.embedding <=> sqlc.narg('embedding')::vector AS distance
+    CASE WHEN sqlc.arg('has_embedding')::boolean = false 
+        THEN NULL 
+        ELSE c.embedding <=> sqlc.arg('embedding')::vector 
+    END AS distance
 FROM course c
 LEFT JOIN program_courses pc 
     ON pc.course_id = c.id 
@@ -58,8 +61,8 @@ WHERE
         SELECT course_id FROM program_antirequisites WHERE program_id = sqlc.narg('user_program_id')::bigint
     ))
 ORDER BY
-    CASE WHEN sqlc.narg('embedding')::vector IS NULL 
+    CASE WHEN sqlc.arg('has_embedding')::boolean = false 
         THEN (CASE WHEN pc.program_id IS NOT NULL THEN 0 ELSE 1 END)
-        ELSE (c.embedding <=> sqlc.narg('embedding')::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
+        ELSE (c.embedding <=> sqlc.arg('embedding')::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
     END ASC
 LIMIT sqlc.arg('limit')::int;

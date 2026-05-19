@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/pgvector/pgvector-go"
+	pgvector_go "github.com/pgvector/pgvector-go"
 )
 
 const addUserAvoidedCourse = `-- name: AddUserAvoidedCourse :exec
@@ -126,32 +127,36 @@ func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, er
 const getCoursesByVectorSearch = `-- name: GetCoursesByVectorSearch :many
 SELECT 
     c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.term, c.level_number,
-    c.embedding <=> $1::vector AS distance
+    CASE WHEN $1::boolean = false 
+        THEN NULL 
+        ELSE c.embedding <=> $2::vector 
+    END AS distance
 FROM course c
 LEFT JOIN program_courses pc 
     ON pc.course_id = c.id 
-    AND pc.program_id = $2::bigint
+    AND pc.program_id = $3::bigint
 WHERE
-    ($3::int  IS NULL OR c.level_number = $3)
-    AND ($4::text  IS NULL OR c.term = $4)
-    AND ($5::text  IS NULL OR c.code ILIKE $5 || '%')
+    ($4::int  IS NULL OR c.level_number = $4)
+    AND ($5::text  IS NULL OR c.term = $5)
+    AND ($6::text  IS NULL OR c.code ILIKE $6 || '%')
     AND NOT EXISTS (
         SELECT 1 FROM user_detail_avoided_courses uac
-        WHERE uac.course_id = c.id AND uac.user_id = $6::uuid
+        WHERE uac.course_id = c.id AND uac.user_id = $7::uuid
     )
-    AND ($2::bigint IS NULL OR c.id NOT IN (
-        SELECT course_id FROM program_antirequisites WHERE program_id = $2::bigint
+    AND ($3::bigint IS NULL OR c.id NOT IN (
+        SELECT course_id FROM program_antirequisites WHERE program_id = $3::bigint
     ))
 ORDER BY
-    CASE WHEN $1::vector IS NULL 
+    CASE WHEN $1::boolean = false 
         THEN (CASE WHEN pc.program_id IS NOT NULL THEN 0 ELSE 1 END)
-        ELSE (c.embedding <=> $1::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
+        ELSE (c.embedding <=> $2::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
     END ASC
-LIMIT $7::int
+LIMIT $8::int
 `
 
 type GetCoursesByVectorSearchParams struct {
-	Embedding     pgvector.Vector
+	HasEmbedding  bool
+	Embedding     pgvector_go.Vector
 	UserProgramID pgtype.Int8
 	Level         pgtype.Int4
 	Term          pgtype.Text
@@ -175,6 +180,7 @@ type GetCoursesByVectorSearchRow struct {
 
 func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, arg GetCoursesByVectorSearchParams) ([]GetCoursesByVectorSearchRow, error) {
 	rows, err := q.db.Query(ctx, getCoursesByVectorSearch,
+		arg.HasEmbedding,
 		arg.Embedding,
 		arg.UserProgramID,
 		arg.Level,

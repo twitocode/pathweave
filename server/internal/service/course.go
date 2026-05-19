@@ -239,16 +239,18 @@ func (cs *CourseService) BuildSearchParams(m *QueryMetadata, embedding []float64
 	}
 
 	if len(embedding) > 0 {
+		p.HasEmbedding = true
 		p.Embedding = pgvector.NewVector(common.Float64ToFloat32Slice(embedding))
 	} else {
-		p.Embedding = pgvector.Vector{}
+		p.HasEmbedding = false
+		p.Embedding = pgvector.NewVector([]float32{0})
 	}
 
 	if m.Level != nil {
 		p.Level = pgtype.Int4{Int32: int32(*m.Level), Valid: true}
 	}
 	if m.Term != nil {
-		p.Term = pgtype.Text{String: *m.Term, Valid: true}
+		p.Term = pgtype.Text{String: common.AppendYearToTerm(m.Term), Valid: true}
 	}
 	if m.Code != nil {
 		p.Code = pgtype.Text{String: *m.Code, Valid: true}

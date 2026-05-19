@@ -74,6 +74,7 @@ func HandleVectorSearchCourse(cs *service.CourseService) http.HandlerFunc {
 		if query == "" {
 			log.Info("search query not provided")
 			common.WriteError(w, http.StatusBadRequest, "search query not provided")
+			return
 		}
 
 		results, err := cs.VectorSearch(r.Context(), query, user)
