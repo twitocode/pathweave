@@ -54,6 +54,9 @@ WHERE
         SELECT 1 FROM user_detail_avoided_courses uac
         WHERE uac.course_id = c.id AND uac.user_id = sqlc.arg('user_id')::uuid
     )
+    AND (sqlc.narg('user_program_id')::bigint IS NULL OR c.id NOT IN (
+        SELECT course_id FROM program_antirequisites WHERE program_id = sqlc.narg('user_program_id')::bigint
+    ))
 ORDER BY
     CASE WHEN sqlc.narg('embedding')::vector IS NULL 
         THEN (CASE WHEN pc.program_id IS NOT NULL THEN 0 ELSE 1 END)

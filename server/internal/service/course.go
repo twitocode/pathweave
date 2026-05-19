@@ -209,8 +209,6 @@ func (cs *CourseService) VectorSearch(ctx context.Context, query string, user *d
 		return nil, err
 	}
 
-	cs.log.Debug("jsonified query", zap.Any("res", qMeta))
-
 	var embedding []float64
 	if qMeta.Query != "" {
 		embedding, err = cs.es.CreateEmbedding(ctx, qMeta.Query)

@@ -36,6 +36,11 @@ type Program struct {
 	RequirementsByLevel []byte
 }
 
+type ProgramAntirequisite struct {
+	ProgramID int64
+	CourseID  int64
+}
+
 type ProgramCourse struct {
 	ProgramID int64
 	CourseID  int64
