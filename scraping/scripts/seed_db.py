@@ -163,6 +163,13 @@ def seed():
                 level_number = EXCLUDED.level_number
         """, course_values)
 
+        scraped_course_codes = [v[0] for v in course_values]
+        if scraped_course_codes:
+            cur.execute(
+                "DELETE FROM course WHERE code <> ALL(%s)",
+                (scraped_course_codes,)
+            )
+
         # Get course code to ID mapping for relationships
         cur.execute("SELECT code, id FROM course")
         course_map = dict(cur.fetchall())
