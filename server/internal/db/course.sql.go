@@ -122,6 +122,88 @@ func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, er
 	return id, err
 }
 
+const getCourseSectionsByTerm = `-- name: GetCourseSectionsByTerm :many
+SELECT 
+  sm.id,
+  s.name AS section,
+  s.type,
+  s.term,
+  s.mode,
+  s.is_in_person,
+  sm.days AS day,
+  sm.start_time,
+  sm.end_time,
+  sm.building,
+  sm.room,
+  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+FROM section AS s
+JOIN section_meeting AS sm ON sm.section_id = s.id
+LEFT JOIN section_teachers AS st ON st.section_id = s.id
+LEFT JOIN teacher AS t ON t.id = st.teacher_id
+WHERE s.course_id = $1 AND s.term = $2
+GROUP BY sm.id, s.id
+ORDER BY s.name
+`
+
+type GetCourseSectionsByTermParams struct {
+	CourseID int64
+	Term     string
+}
+
+type GetCourseSectionsByTermRow struct {
+	ID             int32
+	Section        string
+	Type           string
+	Term           string
+	Mode           string
+	IsInPerson     bool
+	Day            string
+	StartTime      pgtype.Time
+	EndTime        pgtype.Time
+	Building       string
+	Room           string
+	InstructorName interface{}
+	AvgDifficulty  interface{}
+	AvgRating      interface{}
+}
+
+func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSectionsByTermParams) ([]GetCourseSectionsByTermRow, error) {
+	rows, err := q.db.Query(ctx, getCourseSectionsByTerm, arg.CourseID, arg.Term)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCourseSectionsByTermRow
+	for rows.Next() {
+		var i GetCourseSectionsByTermRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Section,
+			&i.Type,
+			&i.Term,
+			&i.Mode,
+			&i.IsInPerson,
+			&i.Day,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Building,
+			&i.Room,
+			&i.InstructorName,
+			&i.AvgDifficulty,
+			&i.AvgRating,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCoursesByVectorSearch = `-- name: GetCoursesByVectorSearch :many
 SELECT 
     c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.level_number,

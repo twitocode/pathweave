@@ -44,6 +44,30 @@ WHERE s.course_id = $1
 GROUP BY sm.id, s.id
 ORDER BY s.name;
 
+-- name: GetCourseSectionsByTerm :many
+SELECT 
+  sm.id,
+  s.name AS section,
+  s.type,
+  s.term,
+  s.mode,
+  s.is_in_person,
+  sm.days AS day,
+  sm.start_time,
+  sm.end_time,
+  sm.building,
+  sm.room,
+  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+FROM section AS s
+JOIN section_meeting AS sm ON sm.section_id = s.id
+LEFT JOIN section_teachers AS st ON st.section_id = s.id
+LEFT JOIN teacher AS t ON t.id = st.teacher_id
+WHERE s.course_id = $1 AND s.term = $2
+GROUP BY sm.id, s.id
+ORDER BY s.name;
+
 -- name: CreateEmbedding :exec
 UPDATE course
 SET embedding = $2

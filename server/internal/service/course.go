@@ -91,14 +91,19 @@ func (cs *CourseService) formatCourseInfo(course interface{}) *CourseInfo {
 	return nil
 }
 
-func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) ([]*Schedule, error) {
+type SchedulesResult struct {
+	Schedules []*Schedule `json:"schedules"`
+	Count     int         `json:"count"`
+}
+
+func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*SchedulesResult, error) {
 	rows, err := cs.db.GetSchedulesForCourse(ctx, int64(id))
 	if err != nil {
-		return make([]*Schedule, 0), err
+		return nil, err
 	}
 
 	schedules := make([]*Schedule, len(rows))
-
+  count := 0
 	for i, r := range rows {
 		schedules[i] = &Schedule{
 			ID:            int(r.ID),
@@ -116,10 +121,61 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) ([]*Sch
 			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
 			AvgRating:     common.ToFloat64(r.AvgRating),
 		}
+    count++
 	}
 
-	return schedules, nil
+	result := &SchedulesResult{
+		Schedules: schedules,
+		Count:     count,
+	}
+	return result, nil
 }
+
+type GroupedSectionResults struct {
+	Sections map[string][]*Schedule `json:"sections"`
+	Count     int                    `json:"count"`
+}
+
+func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, id int, term string) (*GroupedSectionResults, error) {
+	rows, err := cs.db.GetCourseSectionsByTerm(ctx, db.GetCourseSectionsByTermParams{
+		CourseID: int64(id),
+		Term:     term,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	schedules := make(map[string][]*Schedule)
+	count := 0
+	for _, r := range rows {
+		schedule := &Schedule{
+			ID:            int(r.ID),
+			Section:       r.Section,
+			Type:          r.Type,
+			Term:          r.Term,
+			Mode:          r.Mode,
+			IsInPerson:    r.IsInPerson,
+			Day:           r.Day,
+			StartTime:     common.TimeToString(r.StartTime),
+			EndTime:       common.TimeToString(r.EndTime),
+			Building:      r.Building,
+			Room:          r.Room,
+			Instructor:    fmt.Sprintf("%v", r.InstructorName),
+			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
+			AvgRating:     common.ToFloat64(r.AvgRating),
+		}
+		schedules[r.Section] = append(schedules[r.Section], schedule)
+		count++
+	}
+
+	result := &GroupedSectionResults{
+		Sections: schedules,
+		Count:     count,
+	}
+	return result, nil
+}
+
 
 func (cs *CourseService) CreateCourseEmbeddingsBatched(ctx context.Context, codes []string) error {
 	var embeddingStrings []string
