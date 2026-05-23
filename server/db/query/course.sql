@@ -15,18 +15,58 @@ WHERE code = $1
 LIMIT 1;
 
 -- name: GetCourseByCode :one
-SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number
+SELECT id, code, name, description, restrictions, prerequisites, units, level_number
 FROM course
 WHERE code = $1
 LIMIT 1;
 
 -- name: GetSchedulesForCourse :many
-SELECT sc.*, t.avg_difficulty, t.avg_rating
-FROM schedule_combo AS sc
-JOIN teacher t
-  ON t.name = sc.instructor_name
-WHERE sc.course_id = $1
-ORDER BY sc.section;
+SELECT 
+  sm.id,
+  s.name AS section,
+  s.type,
+  s.term,
+  s.mode,
+  s.is_in_person,
+  sm.days AS day,
+  sm.start_time,
+  sm.end_time,
+  sm.building,
+  sm.room,
+  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+FROM section AS s
+JOIN section_meeting AS sm ON sm.section_id = s.id
+LEFT JOIN section_teachers AS st ON st.section_id = s.id
+LEFT JOIN teacher AS t ON t.id = st.teacher_id
+WHERE s.course_id = $1
+GROUP BY sm.id, s.id
+ORDER BY s.name;
+
+-- name: GetCourseSectionsByTerm :many
+SELECT 
+  sm.id,
+  s.name AS section,
+  s.type,
+  s.term,
+  s.mode,
+  s.is_in_person,
+  sm.days AS day,
+  sm.start_time,
+  sm.end_time,
+  sm.building,
+  sm.room,
+  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+FROM section AS s
+JOIN section_meeting AS sm ON sm.section_id = s.id
+LEFT JOIN section_teachers AS st ON st.section_id = s.id
+LEFT JOIN teacher AS t ON t.id = st.teacher_id
+WHERE s.course_id = $1 AND s.term = $2
+GROUP BY sm.id, s.id
+ORDER BY s.name;
 
 -- name: CreateEmbedding :exec
 UPDATE course
@@ -40,7 +80,7 @@ FROM course;
 
 -- name: GetCoursesByVectorSearch :many
 SELECT 
-    c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.term, c.level_number,
+    c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.level_number,
     CASE WHEN sqlc.arg('has_embedding')::boolean = false 
         THEN NULL 
         ELSE c.embedding <=> sqlc.arg('embedding')::vector 
@@ -51,7 +91,9 @@ LEFT JOIN program_courses pc
     AND pc.program_id = sqlc.narg('user_program_id')::bigint
 WHERE
     (sqlc.narg('level')::int  IS NULL OR c.level_number = sqlc.narg('level'))
-    AND (sqlc.narg('term')::text  IS NULL OR c.term = sqlc.narg('term'))
+    AND (sqlc.narg('term')::text IS NULL OR EXISTS (
+        SELECT 1 FROM section sec WHERE sec.course_id = c.id AND sec.term = sqlc.narg('term')
+    ))
     AND (sqlc.narg('code')::text  IS NULL OR c.code ILIKE sqlc.narg('code') || '%')
     AND NOT EXISTS (
         SELECT 1 FROM user_detail_avoided_courses uac

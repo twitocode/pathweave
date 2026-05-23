@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+  "slices"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/twitocode/pathweave/go-api/internal/common"
@@ -11,6 +12,8 @@ import (
 	"github.com/twitocode/pathweave/go-api/internal/service"
 	"go.uber.org/zap"
 )
+
+var validTerms []string = []string{"Fall 2026", "Winter 2027", "Spring/Summer 2027"}
 
 func HandleGetCourseByCode(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -44,16 +47,55 @@ func HandleGetSchedulesForCourse(cs *service.CourseService) http.HandlerFunc {
 		}
 		log := middleware.Logger(r)
 
-		schedules, err := cs.GetCourseSchedules(r.Context(), course_id)
+		res, err := cs.GetCourseSchedules(r.Context(), course_id)
 		if err != nil {
 			log.Error("error getting course schedules", zap.Error(err))
 		}
 
-		if len(schedules) == 0 {
+		if res.Count == 0 {
 			log.Warn(fmt.Sprintf("course with id %d has no schedules", course_id))
 		}
 
-		common.WriteJSON(w, http.StatusOK, schedules)
+		common.WriteJSON(w, http.StatusOK, res)
+	}
+}
+
+func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "course_id")
+		var body struct {
+			Term string `json:"term"`
+		}
+		common.DecodeJSON(r, &body)
+
+		course_id, err := strconv.Atoi(id)
+		if err != nil {
+			common.WriteError(w, http.StatusBadRequest, "course id is not an integer")
+			return
+		}
+
+		if body.Term == "" {
+			common.WriteError(w, http.StatusBadRequest, "term not provided")
+			return
+		}
+
+    if !slices.Contains(validTerms, body.Term) {
+      common.WriteError(w, http.StatusBadRequest, "invalid term provided")
+			return
+    }
+
+		log := middleware.Logger(r)
+
+		res, err := cs.GetCourseSectionsByTerm(r.Context(), course_id, body.Term)
+		if err != nil {
+			log.Error("error getting course schedules", zap.Error(err))
+		}
+
+		if res.Count == 0 {
+			log.Warn(fmt.Sprintf("course with id %d has no schedules", course_id))
+		}
+
+		common.WriteJSON(w, http.StatusOK, res)
 	}
 }
 
@@ -67,7 +109,7 @@ func HandleCreateAllCourseEmbeddings(cs *service.CourseService) http.HandlerFunc
 func HandleVectorSearchCourse(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log := middleware.Logger(r)
-    user, _ := middleware.UserFromContext(r.Context())
+		user, _ := middleware.UserFromContext(r.Context())
 
 		query := r.URL.Query().Get("q")
 

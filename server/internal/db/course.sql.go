@@ -75,7 +75,7 @@ func (q *Queries) GetAllCourseCodes(ctx context.Context) ([]string, error) {
 }
 
 const getCourseByCode = `-- name: GetCourseByCode :one
-SELECT id, code, name, description, restrictions, prerequisites, units, term, level_number
+SELECT id, code, name, description, restrictions, prerequisites, units, level_number
 FROM course
 WHERE code = $1
 LIMIT 1
@@ -89,7 +89,6 @@ type GetCourseByCodeRow struct {
 	Restrictions  string
 	Prerequisites []string
 	Units         int32
-	Term          string
 	LevelNumber   pgtype.Int4
 }
 
@@ -104,7 +103,6 @@ func (q *Queries) GetCourseByCode(ctx context.Context, code string) (GetCourseBy
 		&i.Restrictions,
 		&i.Prerequisites,
 		&i.Units,
-		&i.Term,
 		&i.LevelNumber,
 	)
 	return i, err
@@ -124,9 +122,91 @@ func (q *Queries) GetCourseIDByCode(ctx context.Context, code string) (int64, er
 	return id, err
 }
 
+const getCourseSectionsByTerm = `-- name: GetCourseSectionsByTerm :many
+SELECT 
+  sm.id,
+  s.name AS section,
+  s.type,
+  s.term,
+  s.mode,
+  s.is_in_person,
+  sm.days AS day,
+  sm.start_time,
+  sm.end_time,
+  sm.building,
+  sm.room,
+  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+FROM section AS s
+JOIN section_meeting AS sm ON sm.section_id = s.id
+LEFT JOIN section_teachers AS st ON st.section_id = s.id
+LEFT JOIN teacher AS t ON t.id = st.teacher_id
+WHERE s.course_id = $1 AND s.term = $2
+GROUP BY sm.id, s.id
+ORDER BY s.name
+`
+
+type GetCourseSectionsByTermParams struct {
+	CourseID int64
+	Term     string
+}
+
+type GetCourseSectionsByTermRow struct {
+	ID             int32
+	Section        string
+	Type           string
+	Term           string
+	Mode           string
+	IsInPerson     bool
+	Day            string
+	StartTime      pgtype.Time
+	EndTime        pgtype.Time
+	Building       string
+	Room           string
+	InstructorName interface{}
+	AvgDifficulty  interface{}
+	AvgRating      interface{}
+}
+
+func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSectionsByTermParams) ([]GetCourseSectionsByTermRow, error) {
+	rows, err := q.db.Query(ctx, getCourseSectionsByTerm, arg.CourseID, arg.Term)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCourseSectionsByTermRow
+	for rows.Next() {
+		var i GetCourseSectionsByTermRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Section,
+			&i.Type,
+			&i.Term,
+			&i.Mode,
+			&i.IsInPerson,
+			&i.Day,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Building,
+			&i.Room,
+			&i.InstructorName,
+			&i.AvgDifficulty,
+			&i.AvgRating,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCoursesByVectorSearch = `-- name: GetCoursesByVectorSearch :many
 SELECT 
-    c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.term, c.level_number,
+    c.id, c.code, c.name, c.description, c.restrictions, c.prerequisites, c.units, c.level_number,
     CASE WHEN $1::boolean = false 
         THEN NULL 
         ELSE c.embedding <=> $2::vector 
@@ -137,7 +217,9 @@ LEFT JOIN program_courses pc
     AND pc.program_id = $3::bigint
 WHERE
     ($4::int  IS NULL OR c.level_number = $4)
-    AND ($5::text  IS NULL OR c.term = $5)
+    AND ($5::text IS NULL OR EXISTS (
+        SELECT 1 FROM section sec WHERE sec.course_id = c.id AND sec.term = $5
+    ))
     AND ($6::text  IS NULL OR c.code ILIKE $6 || '%')
     AND NOT EXISTS (
         SELECT 1 FROM user_detail_avoided_courses uac
@@ -173,7 +255,6 @@ type GetCoursesByVectorSearchRow struct {
 	Restrictions  string
 	Prerequisites []string
 	Units         int32
-	Term          string
 	LevelNumber   pgtype.Int4
 	Distance      interface{}
 }
@@ -204,7 +285,6 @@ func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, arg GetCoursesBy
 			&i.Restrictions,
 			&i.Prerequisites,
 			&i.Units,
-			&i.Term,
 			&i.LevelNumber,
 			&i.Distance,
 		); err != nil {
@@ -219,30 +299,45 @@ func (q *Queries) GetCoursesByVectorSearch(ctx context.Context, arg GetCoursesBy
 }
 
 const getSchedulesForCourse = `-- name: GetSchedulesForCourse :many
-SELECT sc.id, sc.combo_index, sc.day, sc.start_time, sc.end_time, sc.type, sc.section, sc.instructor_name, sc.building, sc.room_number, sc.mode, sc.is_in_person, sc.course_id, t.avg_difficulty, t.avg_rating
-FROM schedule_combo AS sc
-JOIN teacher t
-  ON t.name = sc.instructor_name
-WHERE sc.course_id = $1
-ORDER BY sc.section
+SELECT 
+  sm.id,
+  s.name AS section,
+  s.type,
+  s.term,
+  s.mode,
+  s.is_in_person,
+  sm.days AS day,
+  sm.start_time,
+  sm.end_time,
+  sm.building,
+  sm.room,
+  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+FROM section AS s
+JOIN section_meeting AS sm ON sm.section_id = s.id
+LEFT JOIN section_teachers AS st ON st.section_id = s.id
+LEFT JOIN teacher AS t ON t.id = st.teacher_id
+WHERE s.course_id = $1
+GROUP BY sm.id, s.id
+ORDER BY s.name
 `
 
 type GetSchedulesForCourseRow struct {
 	ID             int32
-	ComboIndex     int32
+	Section        string
+	Type           string
+	Term           string
+	Mode           string
+	IsInPerson     bool
 	Day            string
 	StartTime      pgtype.Time
 	EndTime        pgtype.Time
-	Type           string
-	Section        string
-	InstructorName string
 	Building       string
-	RoomNumber     string
-	Mode           string
-	IsInPerson     bool
-	CourseID       int64
-	AvgDifficulty  pgtype.Numeric
-	AvgRating      pgtype.Numeric
+	Room           string
+	InstructorName interface{}
+	AvgDifficulty  interface{}
+	AvgRating      interface{}
 }
 
 func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]GetSchedulesForCourseRow, error) {
@@ -256,18 +351,17 @@ func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]
 		var i GetSchedulesForCourseRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ComboIndex,
+			&i.Section,
+			&i.Type,
+			&i.Term,
+			&i.Mode,
+			&i.IsInPerson,
 			&i.Day,
 			&i.StartTime,
 			&i.EndTime,
-			&i.Type,
-			&i.Section,
-			&i.InstructorName,
 			&i.Building,
-			&i.RoomNumber,
-			&i.Mode,
-			&i.IsInPerson,
-			&i.CourseID,
+			&i.Room,
+			&i.InstructorName,
 			&i.AvgDifficulty,
 			&i.AvgRating,
 		); err != nil {

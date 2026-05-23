@@ -265,9 +265,11 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(ignore_https_errors=True)
-        
+
         main_page = await context.new_page()
-        url = "https://academiccalendars.romcmaster.ca/content.php?catoid=58&navoid=12628"
+        url = (
+            "https://academiccalendars.romcmaster.ca/content.php?catoid=65&navoid=14803"
+        )
         print(f"Navigating to programs list: {url}")
         await main_page.goto(url, wait_until="networkidle")
 
@@ -311,7 +313,7 @@ async def main():
 
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
         tasks = [fetch_program_requirements(context, p_info['url'], p_info['name'], semaphore) for p_info in programs]
-        
+
         results = await asyncio.gather(*tasks)
         valid_results = [r for r in results if r is not None]
 

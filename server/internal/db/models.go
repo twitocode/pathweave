@@ -18,7 +18,6 @@ type Course struct {
 	Restrictions  string
 	Prerequisites []string
 	Units         int32
-	Term          string
 	LevelNumber   pgtype.Int4
 	Embedding     pgvector.Vector
 }
@@ -75,20 +74,34 @@ type ProgramRequirementLevel struct {
 	SortOrder   int32
 }
 
-type ScheduleCombo struct {
-	ID             int32
-	ComboIndex     int32
-	Day            string
-	StartTime      pgtype.Time
-	EndTime        pgtype.Time
-	Type           string
-	Section        string
-	InstructorName string
-	Building       string
-	RoomNumber     string
-	Mode           string
-	IsInPerson     bool
-	CourseID       int64
+type Section struct {
+	ID         int32
+	CourseID   int64
+	Name       string
+	Type       string
+	Term       string
+	Mode       string
+	IsInPerson bool
+}
+
+type SectionMeeting struct {
+	ID        int32
+	SectionID int32
+	Days      string
+	StartTime pgtype.Time
+	EndTime   pgtype.Time
+	Building  string
+	Room      string
+}
+
+type SectionReference struct {
+	ParentSectionID int32
+	ChildSectionID  int32
+}
+
+type SectionTeacher struct {
+	SectionID int32
+	TeacherID int32
 }
 
 type Teacher struct {

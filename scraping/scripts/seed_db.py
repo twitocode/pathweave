@@ -4,7 +4,15 @@ import re
 import psycopg2
 from psycopg2.extras import Json, execute_values
 from dotenv import load_dotenv
-from schedule_seed_transform import build_schedule_values
+from schedule_seed_transform import (
+    parse_time,
+    parse_location,
+    parse_section_name,
+    get_instructor_names,
+    get_section_instructor_set,
+    get_all_instructor_names_for_section,
+    detect_delivery_mode,
+)
 
 # Load environment variables
 load_dotenv()
@@ -83,18 +91,34 @@ def normalize_term(term_str):
         return f"{season.strip()} {year}"
     return term_str
 
+
 def seed():
     conn = get_db_connection()
     cur = conn.cursor()
 
     try:
+        # Load all possible schedules
+        with open("data/all_possible_schedules.json", "r") as f:
+            all_schedules = json.load(f)
+
+        # Collect all unique teacher names from schedules
+        schedule_teacher_names = set()
+        for term_data in all_schedules:
+            for course in term_data.get("courses", []):
+                for section in course.get("sections", []):
+                    for name in get_all_instructor_names_for_section(section):
+                        schedule_teacher_names.add(name)
+
         # 1. Load Teachers
         print("Seeding teachers...")
         with open("data/rmp_data.json", "r") as f:
             rmp_data = json.load(f)
         
         teacher_values = []
+        name_to_rmp_id = {}
         for prof in rmp_data.get("professors", []):
+            lower_name = prof["name"].strip().lower()
+            name_to_rmp_id[lower_name] = prof["id"]
             teacher_values.append((
                 prof["name"],
                 prof.get("avgRating", 0),
@@ -103,6 +127,21 @@ def seed():
                 prof["id"],
                 prof.get("numRatings", 0)
             ))
+            
+        # Add non-RMP teachers from schedules with default values (including "Staff")
+        for name in schedule_teacher_names:
+            lower_name = name.lower()
+            if lower_name not in name_to_rmp_id:
+                fake_rmp_id = f"non_rmp_{name.replace(' ', '_').lower()}"
+                name_to_rmp_id[lower_name] = fake_rmp_id
+                teacher_values.append((
+                    name,
+                    0.0,
+                    0.0,
+                    "Unknown",
+                    fake_rmp_id,
+                    0
+                ))
         
         execute_values(cur, """
             INSERT INTO teacher (name, avg_rating, avg_difficulty, department, rmp_id, num_ratings)
@@ -118,17 +157,8 @@ def seed():
         with open("data/all_courses.json", "r") as f:
             all_courses = json.load(f)
         
-        # Terms come from all_possible_schedules.json
-        with open("data/all_possible_schedules.json", "r") as f:
-            all_schedules = json.load(f)
-        
-        course_terms = {}
-        for item in all_schedules:
-            course_terms[item["course_code"]] = normalize_term(item.get("term", ""))
-
         course_values = []
         for course in all_courses:
-            # Handle both raw (course_name) and cleaned (code/name) formats
             if "code" in course and "name" in course:
                 code = course["code"]
                 name = course["name"]
@@ -146,12 +176,11 @@ def seed():
                 course.get("restrictions", ""),
                 course.get("prerequisites", []),
                 parse_units(course.get("units", "")),
-                course_terms.get(code, "Unknown"),
                 level_number,
             ))
         
         execute_values(cur, """
-            INSERT INTO course (code, name, description, restrictions, prerequisites, units, term, level_number)
+            INSERT INTO course (code, name, description, restrictions, prerequisites, units, level_number)
             VALUES %s
             ON CONFLICT (code) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -159,41 +188,131 @@ def seed():
                 restrictions = EXCLUDED.restrictions,
                 prerequisites = EXCLUDED.prerequisites,
                 units = EXCLUDED.units,
-                term = EXCLUDED.term,
                 level_number = EXCLUDED.level_number
         """, course_values)
 
-        # Get course code to ID mapping for relationships
+        scraped_course_codes = [v[0] for v in course_values]
+        if scraped_course_codes:
+            cur.execute(
+                "DELETE FROM course WHERE code <> ALL(%s)",
+                (scraped_course_codes,)
+            )
+
+        # Get mappings
         cur.execute("SELECT code, id FROM course")
         course_map = dict(cur.fetchall())
         
-        # Get teacher rmp_id to ID mapping
         cur.execute("SELECT rmp_id, id FROM teacher")
-        teacher_map = dict(cur.fetchall())
-
-        # 3. Load Schedule Combos
-        print("Seeding schedule combos...")
-        schedule_values = build_schedule_values(all_schedules, course_map)
+        teacher_rmp_map = dict(cur.fetchall())
         
-        # Clear existing schedules to avoid duplicates if re-running
-        cur.execute("DELETE FROM schedule_combo")
-        execute_values(cur, """
-            INSERT INTO schedule_combo (
-                course_id,
-                combo_index,
-                day,
-                start_time,
-                end_time,
-                type,
-                section,
-                instructor_name,
-                building,
-                room_number,
-                mode,
-                is_in_person
-            )
-            VALUES %s
-        """, schedule_values)
+        cur.execute("SELECT name, id FROM teacher")
+        teacher_name_map = dict(cur.fetchall())
+
+        # 3. Seed Sections, Section Meetings, Section Teachers, and Section References
+        print("Seeding sections...")
+        cur.execute("DELETE FROM section_references")
+        cur.execute("DELETE FROM section_teachers")
+        cur.execute("DELETE FROM section_meeting")
+        cur.execute("DELETE FROM section")
+
+        total_sections = 0
+        total_meetings = 0
+        total_section_teachers = 0
+        total_references = 0
+
+        for term_data in all_schedules:
+            term = normalize_term(term_data.get("term", ""))
+            for course in term_data.get("courses", []):
+                course_code = course.get("course_code")
+                course_id = course_map.get(course_code)
+                if not course_id:
+                    continue
+
+                sections = course.get("sections", [])
+                
+                # Track section IDs by type for reference linking
+                lec_sem_sections = []  # (section_db_id, instructor_set)
+                lab_tut_sections = []  # (section_db_id, instructor_set)
+
+                for section in sections:
+                    section_name, section_type = parse_section_name(section.get("section_name", ""))
+                    if not section_name:
+                        continue
+
+                    mode, is_in_person = detect_delivery_mode(section)
+
+                    # Insert section
+                    cur.execute(
+                        """
+                        INSERT INTO section (course_id, name, type, term, mode, is_in_person)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (course_id, section_name, section_type, term, mode, is_in_person)
+                    )
+                    section_id = cur.fetchone()[0]
+                    total_sections += 1
+
+                    # Insert section meetings
+                    for detail in section.get("details", []):
+                        days = detail.get("days", "")
+                        start_time = parse_time(detail.get("start_time"))
+                        end_time = parse_time(detail.get("end_time"))
+                        building, room = parse_location(detail.get("room", ""))
+
+                        cur.execute(
+                            """
+                            INSERT INTO section_meeting (section_id, days, start_time, end_time, building, room)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (section_id, days, start_time, end_time, building, room)
+                        )
+                        total_meetings += 1
+
+                    # Insert section teachers
+                    all_names = get_all_instructor_names_for_section(section)
+                    linked_teacher_ids = set()
+                    for name in all_names:
+                        teacher_id = teacher_name_map.get(name)
+                        if teacher_id and teacher_id not in linked_teacher_ids:
+                            linked_teacher_ids.add(teacher_id)
+                            cur.execute(
+                                """
+                                INSERT INTO section_teachers (section_id, teacher_id)
+                                VALUES (%s, %s)
+                                ON CONFLICT DO NOTHING
+                                """,
+                                (section_id, teacher_id)
+                            )
+                            total_section_teachers += 1
+
+                    # Track for reference linking
+                    instructor_set = get_section_instructor_set(section)
+                    if section_type in ("LEC", "SEM"):
+                        lec_sem_sections.append((section_id, instructor_set))
+                    elif section_type in ("LAB", "TUT"):
+                        lab_tut_sections.append((section_id, instructor_set))
+
+                # Create section references: link LEC/SEM -> LAB/TUT by matching professors
+                for parent_id, parent_insts in lec_sem_sections:
+                    for child_id, child_insts in lab_tut_sections:
+                        # If the child has no non-Staff instructors, link to all parents
+                        # If there's instructor overlap, link them
+                        if not child_insts or not parent_insts or child_insts.intersection(parent_insts):
+                            cur.execute(
+                                """
+                                INSERT INTO section_references (parent_section_id, child_section_id)
+                                VALUES (%s, %s)
+                                ON CONFLICT DO NOTHING
+                                """,
+                                (parent_id, child_id)
+                            )
+                            total_references += 1
+
+        print(f"  Inserted {total_sections} sections")
+        print(f"  Inserted {total_meetings} section meetings")
+        print(f"  Inserted {total_section_teachers} section-teacher links")
+        print(f"  Inserted {total_references} section references")
 
         # 4. Load Programs
         print("Seeding programs...")
@@ -269,7 +388,7 @@ def seed():
         course_teacher_values = []
         teacher_program_values = []
 
-        # Build a reverse lookup: course_code -> set of program_ids
+        # Build a reverse lookup: course_id -> set of program_ids
         cur.execute("SELECT course_id, program_id FROM program_courses")
         course_to_programs = {}
         for course_id, program_id in cur.fetchall():
@@ -278,7 +397,7 @@ def seed():
         seen_teacher_programs = set()
 
         for prof in rmp_data.get("professors", []):
-            teacher_id = teacher_map.get(prof["id"])
+            teacher_id = teacher_rmp_map.get(prof["id"])
             if not teacher_id:
                 continue
             for course_code in prof.get("courses", []):
@@ -287,13 +406,31 @@ def seed():
                     continue
                 course_teacher_values.append((course_id, teacher_id))
 
-                # Also link teacher to every program that includes this course
                 for program_id in course_to_programs.get(course_id, []):
                     key = (teacher_id, program_id)
                     if key not in seen_teacher_programs:
                         seen_teacher_programs.add(key)
                         teacher_program_values.append(key)
-        
+
+        # Also add course-teacher links from schedule data
+        for term_data in all_schedules:
+            for course in term_data.get("courses", []):
+                course_code = course.get("course_code")
+                course_id = course_map.get(course_code)
+                if not course_id:
+                    continue
+                for section in course.get("sections", []):
+                    for name in get_all_instructor_names_for_section(section):
+                        teacher_id = teacher_name_map.get(name)
+                        if not teacher_id:
+                            continue
+                        course_teacher_values.append((course_id, teacher_id))
+                        for program_id in course_to_programs.get(course_id, []):
+                            key = (teacher_id, program_id)
+                            if key not in seen_teacher_programs:
+                                seen_teacher_programs.add(key)
+                                teacher_program_values.append(key)
+                    
         execute_values(cur, """
             INSERT INTO course_teachers (course_id, teacher_id)
             VALUES %s

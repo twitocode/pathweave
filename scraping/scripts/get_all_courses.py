@@ -9,7 +9,7 @@ from playwright.async_api import Browser, Page, async_playwright
 
 # Limit concurrent requests to avoid overwhelming the server
 MAX_CONCURRENT_REQUESTS = 10
-TOTAL_PAGES = 33
+TOTAL_PAGES = 34
 HEADLESS = True
 PAGE_NAV_CONCURRENCY = 8
 
@@ -302,8 +302,8 @@ async def scrape_course_page(
 async def scrape_courses():
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    catoid = "58"
-    navoid = "12627"
+    catoid = "65"
+    navoid = "14802"
     base_preview_url = (
         f"https://academiccalendars.romcmaster.ca/ajax/preview_course.php?catoid={catoid}&show&coid="
     )

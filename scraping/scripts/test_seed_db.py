@@ -31,118 +31,132 @@ SEED = importlib.util.module_from_spec(SEED_SPEC)
 SEED_SPEC.loader.exec_module(SEED)
 
 
-class BuildScheduleValuesTests(unittest.TestCase):
-    def test_includes_section_metadata_for_each_schedule_block(self):
-        all_schedules = [
-            {
-                "course_code": "CHEM 1E03",
-                "combinations": [
-                    {
-                        "index": 7,
-                        "schedule_blocks": [
-                            {
-                                "day": "Tue",
-                                "start": "1:30 PM",
-                                "end": "4:20 PM",
-                                "type": "LEC",
-                                "section": "LEC C01",
-                            },
-                            {
-                                "day": "Wed",
-                                "start": "9:30 AM",
-                                "end": "11:50 AM",
-                                "type": "LAB",
-                                "section": "LAB L02",
-                            },
-                        ],
-                        "sections": [
-                            {
-                                "section": "LEC C01",
-                                "instructor": "Linda Davis",
-                                "location": "Bldg - JHE_376",
-                                "mode": "In Person",
-                            },
-                            {
-                                "section": "LAB L02",
-                                "instructor": "Staff",
-                                "location": "Bldg - ABB_122LAB",
-                                "mode": "Online",
-                            },
-                        ],
-                    }
-                ],
-            }
-        ]
-        course_map = {"CHEM 1E03": 42}
+class ParseTimeTests(unittest.TestCase):
+    def test_parses_no_space_format(self):
+        self.assertEqual(TRANSFORM.parse_time("4:30PM"), "16:30:00")
+        self.assertEqual(TRANSFORM.parse_time("10:30AM"), "10:30:00")
+        self.assertEqual(TRANSFORM.parse_time("12:00PM"), "12:00:00")
 
-        rows = TRANSFORM.build_schedule_values(all_schedules, course_map)
+    def test_parses_space_format(self):
+        self.assertEqual(TRANSFORM.parse_time("1:30 PM"), "13:30:00")
+        self.assertEqual(TRANSFORM.parse_time("9:30 AM"), "09:30:00")
 
-        self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[0][0], 42)  # course_id
-        self.assertEqual(rows[0][1], 7)  # combo_index
-        self.assertEqual(rows[0][6], "LEC C01")  # section
-        self.assertEqual(rows[0][7], "Linda Davis")  # instructor_name
-        self.assertEqual(rows[0][8], "JHE")  # building
-        self.assertEqual(rows[0][9], "376")  # room_number
-        self.assertEqual(rows[0][10], "In Person")  # mode
-        self.assertTrue(rows[0][11])  # is_in_person
+    def test_handles_tba_and_empty(self):
+        self.assertIsNone(TRANSFORM.parse_time("TBA"))
+        self.assertIsNone(TRANSFORM.parse_time(""))
+        self.assertIsNone(TRANSFORM.parse_time(None))
 
-        self.assertEqual(rows[1][6], "LAB L02")
-        self.assertEqual(rows[1][7], "Staff")
-        self.assertEqual(rows[1][8], "ABB")
-        self.assertEqual(rows[1][9], "122")
-        self.assertEqual(rows[1][10], "Online")
-        self.assertFalse(rows[1][11])
 
-    def test_parses_online_and_tbd_locations(self):
-        all_schedules = [
-            {
-                "course_code": "COMP 1XX3",
-                "combinations": [
-                    {
-                        "index": 1,
-                        "schedule_blocks": [
-                            {
-                                "day": "Mon",
-                                "start": "10:30 AM",
-                                "end": "11:20 AM",
-                                "type": "LEC",
-                                "section": "LEC C01",
-                            },
-                            {
-                                "day": "Tue",
-                                "start": "10:30 AM",
-                                "end": "11:20 AM",
-                                "type": "TUT",
-                                "section": "TUT T01",
-                            },
-                        ],
-                        "sections": [
-                            {
-                                "section": "LEC C01",
-                                "instructor": "Staff",
-                                "location": "Master - ONLINE",
-                                "mode": "Online",
-                            },
-                            {
-                                "section": "TUT T01",
-                                "instructor": "Staff",
-                                "location": "TBD",
-                                "mode": "Unknown",
-                            },
-                        ],
-                    }
-                ],
-            }
-        ]
-        course_map = {"COMP 1XX3": 100}
+class ParseLocationTests(unittest.TestCase):
+    def test_parses_standard_building_room(self):
+        self.assertEqual(TRANSFORM.parse_location("ABB 271"), ("ABB", "271"))
+        self.assertEqual(TRANSFORM.parse_location("BSB B156"), ("BSB", "B156"))
 
-        rows = TRANSFORM.build_schedule_values(all_schedules, course_map)
+    def test_parses_in_person_placeholder(self):
+        self.assertEqual(TRANSFORM.parse_location("In Person"), ("", ""))
 
-        self.assertEqual(rows[0][8], "Online")
-        self.assertEqual(rows[0][9], "Online")
-        self.assertEqual(rows[1][8], "TBD")
-        self.assertEqual(rows[1][9], "TBD")
+    def test_parses_online(self):
+        self.assertEqual(TRANSFORM.parse_location("Online"), ("Online", "Online"))
+        self.assertEqual(TRANSFORM.parse_location("Virtual Classroom"), ("Online", "Online"))
+
+    def test_parses_tba(self):
+        self.assertEqual(TRANSFORM.parse_location("TBA"), ("TBD", "TBD"))
+        self.assertEqual(TRANSFORM.parse_location("TBD"), ("TBD", "TBD"))
+
+    def test_parses_empty(self):
+        self.assertEqual(TRANSFORM.parse_location(""), ("", ""))
+        self.assertEqual(TRANSFORM.parse_location(None), ("", ""))
+
+
+class ParseSectionNameTests(unittest.TestCase):
+    def test_converts_raw_format(self):
+        self.assertEqual(TRANSFORM.parse_section_name("C01-LEC (5432)"), ("LEC C01", "LEC"))
+        self.assertEqual(TRANSFORM.parse_section_name("L01-LAB (7679)"), ("LAB L01", "LAB"))
+        self.assertEqual(TRANSFORM.parse_section_name("T03-TUT (9104)"), ("TUT T03", "TUT"))
+
+    def test_handles_already_clean_format(self):
+        # Already clean format should pass through
+        name, type_ = TRANSFORM.parse_section_name("LEC C01")
+        self.assertEqual(name, "LEC C01")
+
+    def test_handles_empty(self):
+        self.assertEqual(TRANSFORM.parse_section_name(""), ("", ""))
+        self.assertEqual(TRANSFORM.parse_section_name(None), ("", ""))
+
+
+class GetInstructorNamesTests(unittest.TestCase):
+    def test_parses_single_name(self):
+        self.assertEqual(TRANSFORM.get_instructor_names("John Smith"), ["John Smith"])
+
+    def test_parses_newline_separated(self):
+        self.assertEqual(
+            TRANSFORM.get_instructor_names("Reza Nejat,\nSara Cormier"),
+            ["Reza Nejat", "Sara Cormier"]
+        )
+
+    def test_parses_multi_instructor_with_nbsp(self):
+        result = TRANSFORM.get_instructor_names("Miranda Schmidt,\nOleksiy\u00a0\u00a0\u00a0\u00a0 Alex Vorobyov")
+        self.assertEqual(result, ["Miranda Schmidt", "Oleksiy Alex Vorobyov"])
+
+    def test_parses_three_instructors(self):
+        result = TRANSFORM.get_instructor_names("Adrienne Davidson,\nNibaldo Galleguillos,\nPeter Graefe")
+        self.assertEqual(result, ["Adrienne Davidson", "Nibaldo Galleguillos", "Peter Graefe"])
+
+    def test_includes_staff(self):
+        result = TRANSFORM.get_instructor_names("Staff")
+        self.assertEqual(result, ["Staff"])
+
+    def test_empty(self):
+        self.assertEqual(TRANSFORM.get_instructor_names(""), [])
+        self.assertEqual(TRANSFORM.get_instructor_names(None), [])
+
+
+class GetSectionInstructorSetTests(unittest.TestCase):
+    def test_extracts_non_staff_instructors(self):
+        section = {
+            "details": [
+                {"instructor": "John Smith"},
+                {"instructor": "Staff"},
+                {"instructor": "Jane Doe"},
+            ]
+        }
+        result = TRANSFORM.get_section_instructor_set(section)
+        self.assertEqual(result, {"John Smith", "Jane Doe"})
+
+    def test_returns_empty_for_staff_only(self):
+        section = {
+            "details": [
+                {"instructor": "Staff"},
+            ]
+        }
+        result = TRANSFORM.get_section_instructor_set(section)
+        self.assertEqual(result, set())
+
+
+class DetectDeliveryModeTests(unittest.TestCase):
+    def test_in_person(self):
+        section = {"details": [{"room": "ABB 271"}]}
+        mode, is_in_person = TRANSFORM.detect_delivery_mode(section)
+        self.assertEqual(mode, "In Person")
+        self.assertTrue(is_in_person)
+
+    def test_online(self):
+        section = {"details": [{"room": "Online"}]}
+        mode, is_in_person = TRANSFORM.detect_delivery_mode(section)
+        self.assertEqual(mode, "Online")
+        self.assertFalse(is_in_person)
+
+    def test_blended(self):
+        section = {"details": [{"room": "ABB 271"}, {"room": "Online"}]}
+        mode, is_in_person = TRANSFORM.detect_delivery_mode(section)
+        self.assertEqual(mode, "Blended")
+        self.assertTrue(is_in_person)
+
+    def test_in_person_placeholder(self):
+        section = {"details": [{"room": "In Person"}]}
+        mode, is_in_person = TRANSFORM.detect_delivery_mode(section)
+        self.assertEqual(mode, "In Person")
+        self.assertTrue(is_in_person)
 
 
 class RequirementNormalizationTests(unittest.TestCase):
