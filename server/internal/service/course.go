@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,26 +26,24 @@ type CourseInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Units       int    `json:"units"`
-	Term        string `json:"term"`
 	LevelNumber int    `json:"level_number"`
 }
 
 type Schedule struct {
-	ID               int     `json:"id"`
-	ComboIndex       int     `json:"combo_index"`
-	Day              string  `json:"day"`
-	StartTime        string  `json:"start_time"`
-	EndTime          string  `json:"end_time"`
-	Type             string  `json:"type"`
-	Section          string  `json:"section"`
-	Teacher          string  `json:"teacher"`
-	Building         string  `json:"building"`
-	Room       string  `json:"room"`
-	Mode             string  `json:"mode"`
-	IsInPerson       bool    `json:"is_in_person"`
-	AvgDifficulty    float64 `json:"avg_difficulty"`
-	AvgRating        float64 `json:"avg_rating"`
-	StudentSentiment string  `json:"student_sentiment"`
+	ID            int     `json:"id"`
+	Section       string  `json:"section"`
+	Type          string  `json:"type"`
+	Term          string  `json:"term"`
+	Mode          string  `json:"mode"`
+	IsInPerson    bool    `json:"is_in_person"`
+	Day           string  `json:"day"`
+	StartTime     string  `json:"start_time"`
+	EndTime       string  `json:"end_time"`
+	Building      string  `json:"building"`
+	Room          string  `json:"room"`
+	Instructor    string  `json:"instructor"`
+	AvgDifficulty float64 `json:"avg_difficulty"`
+	AvgRating     float64 `json:"avg_rating"`
 }
 
 func NewCourseService(queries *db.Queries, log *zap.Logger, es *EmbeddingService, ais *AIService) *CourseService {
@@ -75,7 +72,6 @@ func (cs *CourseService) formatCourseInfo(course interface{}) *CourseInfo {
 				Name:        c.Name,
 				Description: c.Description,
 				Units:       int(c.Units),
-				Term:        c.Term,
 				LevelNumber: int(c.LevelNumber.Int32),
 			}
 		}
@@ -87,7 +83,6 @@ func (cs *CourseService) formatCourseInfo(course interface{}) *CourseInfo {
 				Name:        c.Name,
 				Description: c.Description,
 				Units:       int(c.Units),
-				Term:        c.Term,
 				LevelNumber: int(c.LevelNumber.Int32),
 			}
 		}
@@ -98,30 +93,29 @@ func (cs *CourseService) formatCourseInfo(course interface{}) *CourseInfo {
 
 func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) ([]*Schedule, error) {
 	rows, err := cs.db.GetSchedulesForCourse(ctx, int64(id))
+	if err != nil {
+		return make([]*Schedule, 0), err
+	}
 
 	schedules := make([]*Schedule, len(rows))
 
 	for i, r := range rows {
 		schedules[i] = &Schedule{
-			ID:               int(r.ID),
-			ComboIndex:       int(r.ComboIndex),
-			Day:              r.Day,
-			StartTime:        common.TimeToString(r.StartTime),
-			EndTime:          common.TimeToString(r.EndTime),
-			Type:             r.Type,
-			Section:          strings.Split(r.Section, " ")[1],
-			Teacher:          r.InstructorName,
-			Building:         r.Building,
-			Room:       r.Room,
-			Mode:             r.Mode,
-			IsInPerson:       r.IsInPerson,
-			AvgDifficulty:    common.NumericToFloat64(r.AvgDifficulty),
-			AvgRating:        common.NumericToFloat64(r.AvgRating),
-			StudentSentiment: "",
+			ID:            int(r.ID),
+			Section:       r.Section,
+			Type:          r.Type,
+			Term:          r.Term,
+			Mode:          r.Mode,
+			IsInPerson:    r.IsInPerson,
+			Day:           r.Day,
+			StartTime:     common.TimeToString(r.StartTime),
+			EndTime:       common.TimeToString(r.EndTime),
+			Building:      r.Building,
+			Room:          r.Room,
+			Instructor:    fmt.Sprintf("%v", r.InstructorName),
+			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
+			AvgRating:     common.ToFloat64(r.AvgRating),
 		}
-	}
-	if err != nil {
-		return make([]*Schedule, 0), err
 	}
 
 	return schedules, nil

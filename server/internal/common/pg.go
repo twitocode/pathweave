@@ -36,9 +36,27 @@ func NumericToFloat64(pn pgtype.Numeric) float64 {
 }
 
 func Float64ToFloat32Slice(in []float64) []float32 {
-    out := make([]float32, len(in))
-    for i, v := range in {
-        out[i] = float32(v)
-    }
-    return out
+	out := make([]float32, len(in))
+	for i, v := range in {
+		out[i] = float32(v)
+	}
+	return out
+}
+
+func ToFloat64(v interface{}) float64 {
+	if v == nil {
+		return 0.0
+	}
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case pgtype.Numeric:
+		return NumericToFloat64(val)
+	default:
+		return 0.0
+	}
 }
