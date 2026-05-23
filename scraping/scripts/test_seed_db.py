@@ -83,7 +83,7 @@ class BuildScheduleValuesTests(unittest.TestCase):
         self.assertEqual(rows[0][6], "LEC C01")  # section
         self.assertEqual(rows[0][7], "Linda Davis")  # instructor_name
         self.assertEqual(rows[0][8], "JHE")  # building
-        self.assertEqual(rows[0][9], "376")  # room_number
+        self.assertEqual(rows[0][9], "376")  # room
         self.assertEqual(rows[0][10], "In Person")  # mode
         self.assertTrue(rows[0][11])  # is_in_person
 
@@ -143,6 +143,129 @@ class BuildScheduleValuesTests(unittest.TestCase):
         self.assertEqual(rows[0][9], "Online")
         self.assertEqual(rows[1][8], "TBD")
         self.assertEqual(rows[1][9], "TBD")
+
+    def test_parses_new_mosaic_space_separated_locations_and_modes(self):
+        all_schedules = [
+            {
+                "course_code": "COMPSCI 1JC3",
+                "combinations": [
+                    {
+                        "index": 1,
+                        "schedule_blocks": [
+                            {
+                                "day": "Mon",
+                                "start": "9:30 AM",
+                                "end": "10:20 AM",
+                                "type": "LEC",
+                                "section": "LEC C01",
+                            },
+                            {
+                                "day": "Tue",
+                                "start": "1:30 PM",
+                                "end": "2:20 PM",
+                                "type": "TUT",
+                                "section": "TUT T01",
+                            },
+                            {
+                                "day": "Wed",
+                                "start": "1:30 PM",
+                                "end": "2:20 PM",
+                                "type": "LAB",
+                                "section": "LAB L01",
+                            },
+                            {
+                                "day": "Thu",
+                                "start": "1:30 PM",
+                                "end": "2:20 PM",
+                                "type": "LEC",
+                                "section": "LEC C02",
+                            },
+                            {
+                                "day": "Fri",
+                                "start": "1:30 PM",
+                                "end": "2:20 PM",
+                                "type": "TUT",
+                                "section": "TUT T02",
+                            },
+                        ],
+                        "sections": [
+                            {
+                                "section": "LEC C01",
+                                "instructor": "Staff",
+                                "location": "ABB 271",
+                                "mode": "In Person",
+                            },
+                            {
+                                "section": "TUT T01",
+                                "instructor": "Staff",
+                                "location": "Virtual Classroom",
+                                "mode": "Virtual Classroom",
+                            },
+                            {
+                                "section": "LAB L01",
+                                "instructor": "Staff",
+                                "location": "Blended (In-Person/Online)",
+                                "mode": "Blended (In-Person/Online)",
+                            },
+                            {
+                                "section": "LEC C02",
+                                "instructor": "Staff",
+                                "location": "Mohawk Campus",
+                                "mode": "In Person",
+                            },
+                            {
+                                "section": "TUT T02",
+                                "instructor": "Staff",
+                                "location": "LRW 1047 (BLACK BOX THEATRE)",
+                                "mode": "In Person",
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+        course_map = {"COMPSCI 1JC3": 200}
+
+        rows = TRANSFORM.build_schedule_values(all_schedules, course_map)
+
+        self.assertEqual(len(rows), 5)
+
+        # Row 0: ABB 271 - In Person
+        self.assertEqual(rows[0][8], "ABB")
+        self.assertEqual(rows[0][9], "271")
+        self.assertEqual(rows[0][10], "In Person")
+        self.assertTrue(rows[0][11])  # is_in_person
+
+        # Row 1: Virtual Classroom - Virtual Classroom
+        self.assertEqual(rows[1][8], "Online")
+        self.assertEqual(rows[1][9], "Online")
+        self.assertEqual(rows[1][10], "Virtual Classroom")
+        self.assertFalse(rows[1][11])  # is_in_person
+
+        # Row 2: Blended (In-Person/Online) - Blended
+        self.assertEqual(rows[2][8], "Online")
+        self.assertEqual(rows[2][9], "Online")
+        self.assertEqual(rows[2][10], "Blended (In-Person/Online)")
+        self.assertTrue(rows[2][11])  # is_in_person (hybrid has in-person)
+
+        # Row 3: Mohawk Campus - In Person
+        self.assertEqual(rows[3][8], "Mohawk Campus")
+        self.assertEqual(rows[3][9], "")
+        self.assertEqual(rows[3][10], "In Person")
+        self.assertTrue(rows[3][11])  # is_in_person
+
+        # Row 4: LRW 1047 (BLACK BOX THEATRE) - In Person
+        self.assertEqual(rows[4][8], "LRW")
+        self.assertEqual(rows[4][9], "1047 (BLACK BOX THEATRE)")
+        self.assertEqual(rows[4][10], "In Person")
+        self.assertTrue(rows[4][11])  # is_in_person
+
+    def test_parses_instructor_names(self):
+        self.assertEqual(TRANSFORM.parse_instructor_name(""), "Staff")
+        self.assertEqual(TRANSFORM.parse_instructor_name(None), "Staff")
+        self.assertEqual(TRANSFORM.parse_instructor_name("Reza Nejat,\nSara Cormier"), "Reza Nejat, Sara Cormier")
+        self.assertEqual(TRANSFORM.parse_instructor_name("Miranda Schmidt,\nOleksiy\u00a0\u00a0\u00a0\u00a0 Alex Vorobyov"), "Miranda Schmidt, Oleksiy Alex Vorobyov")
+        self.assertEqual(TRANSFORM.parse_instructor_name("Adrienne Davidson,\nNibaldo Galleguillos,\nPeter Graefe"), "Adrienne Davidson, Nibaldo Galleguillos, Peter Graefe")
 
 
 class RequirementNormalizationTests(unittest.TestCase):

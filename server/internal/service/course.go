@@ -41,7 +41,7 @@ type Schedule struct {
 	Section          string  `json:"section"`
 	Teacher          string  `json:"teacher"`
 	Building         string  `json:"building"`
-	RoomNumber       string  `json:"room_number"`
+	Room       string  `json:"room"`
 	Mode             string  `json:"mode"`
 	IsInPerson       bool    `json:"is_in_person"`
 	AvgDifficulty    float64 `json:"avg_difficulty"`
@@ -112,7 +112,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) ([]*Sch
 			Section:          strings.Split(r.Section, " ")[1],
 			Teacher:          r.InstructorName,
 			Building:         r.Building,
-			RoomNumber:       r.RoomNumber,
+			Room:       r.Room,
 			Mode:             r.Mode,
 			IsInPerson:       r.IsInPerson,
 			AvgDifficulty:    common.NumericToFloat64(r.AvgDifficulty),

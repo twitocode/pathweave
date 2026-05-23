@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS schedule_combo (
   section TEXT NOT NULL,
   instructor_name TEXT NOT NULL DEFAULT 'Staff',
   building TEXT NOT NULL DEFAULT '',
-  room_number TEXT NOT NULL DEFAULT '',
+  room TEXT NOT NULL DEFAULT '',
   mode TEXT NOT NULL DEFAULT 'Unknown',
   is_in_person BOOLEAN NOT NULL DEFAULT FALSE,
 

@@ -16,7 +16,14 @@ def parse_time(time_str):
 def parse_mode_to_is_in_person(mode_str):
     if not mode_str:
         return False
-    return mode_str.strip().lower() == "in person"
+    m = mode_str.strip().lower()
+    # Check if "online" or "virtual" is in the mode.
+    # If it has "online" or "virtual", we only mark it in-person if it's a hybrid
+    # mode that explicitly contains "in person", "in-person", or "blended".
+    if "online" in m or "virtual" in m:
+        return "in person" in m or "in-person" in m or "blended" in m
+    # Otherwise, check for standard virtual indicators; default to True for normal modes.
+    return True
 
 
 def parse_location(location_str):
@@ -26,7 +33,13 @@ def parse_location(location_str):
     raw = location_str.strip()
     upper_raw = raw.upper()
 
-    if "TBD" in upper_raw or "TBA" in upper_raw:
+    # Match common placeholders like TBD, TBA, To Be Announced, or See Class Notes
+    if (
+        "TBD" in upper_raw
+        or "TBA" in upper_raw
+        or "ANNOUNCED" in upper_raw
+        or "SEE CLASS NOTES" in upper_raw
+    ):
         return "TBD", "TBD"
 
     if "ONLINE" in upper_raw or "VIRTUAL" in upper_raw:
@@ -37,11 +50,53 @@ def parse_location(location_str):
         raw = raw.split(" - ", 1)[1].strip()
 
     if "_" in raw:
-        building, room_number = raw.split("_", 1)
-        cleaned_room = re.sub(r"lab", "", room_number, flags=re.IGNORECASE).strip()
+        building, room = raw.split("_", 1)
+        cleaned_room = re.sub(r"lab", "", room, flags=re.IGNORECASE).strip()
         return building.strip(), cleaned_room
 
+    # Handle space-separated building and room numbers: e.g. "ABB 271", "BSB B156"
+    # We split by the first whitespace. If the first part is all uppercase alphanumeric
+    # (e.g. "ABB", "T13") and there's a second part, we treat it as building and room.
+    parts = raw.split(None, 1)
+    if len(parts) == 2:
+        building, room = parts
+        if re.match(r"^[A-Z0-9]+$", building):
+            cleaned_room = re.sub(r"lab", "", room, flags=re.IGNORECASE).strip()
+            return building, cleaned_room
+
     return raw.strip(), ""
+
+
+def get_instructor_names(instructor_str):
+    if not instructor_str:
+        return []
+    
+    parts = instructor_str.split(',')
+    clean_parts = []
+    for part in parts:
+        clean_part = re.sub(r'\s+', ' ', part).strip()
+        if clean_part and clean_part.lower() != "staff":
+            clean_parts.append(clean_part)
+            
+    return clean_parts
+
+
+def parse_instructor_name(instructor_str):
+    clean_parts = get_instructor_names(instructor_str)
+    if not clean_parts:
+        return "Staff"
+    return ", ".join(clean_parts)
+
+
+def parse_section_name(raw_section):
+    if not raw_section:
+        return ""
+    match = re.match(r"^([A-Z0-9]+)\s*-\s*([A-Z]+)(?:\s+\(\d+\))?$", raw_section.strip(), flags=re.IGNORECASE)
+    if match:
+        section_code = match.group(1).upper()
+        section_type = match.group(2).upper()
+        return f"{section_type} {section_code}"
+    return raw_section.strip()
 
 
 def build_schedule_values(all_schedules, course_map):
@@ -54,17 +109,18 @@ def build_schedule_values(all_schedules, course_map):
 
         for combo in item.get("combinations", []):
             combo_index = combo.get("index", 0)
-            section_details = {
-                section.get("section"): section
-                for section in combo.get("sections", [])
-                if section.get("section")
-            }
+            section_details = {}
+            for section in combo.get("sections", []):
+                raw_sec = section.get("section")
+                if raw_sec:
+                    clean_sec = parse_section_name(raw_sec)
+                    section_details[clean_sec] = section
 
             for block in combo.get("schedule_blocks", []):
-                section_name = block["section"]
-                details = section_details.get(section_name, {})
+                clean_sec_name = parse_section_name(block.get("section", ""))
+                details = section_details.get(clean_sec_name, {})
                 mode = details.get("mode", "Unknown")
-                building, room_number = parse_location(details.get("location", ""))
+                building, room = parse_location(details.get("location", ""))
 
                 schedule_values.append(
                     (
@@ -74,10 +130,10 @@ def build_schedule_values(all_schedules, course_map):
                         parse_time(block["start"]),
                         parse_time(block["end"]),
                         block["type"],
-                        section_name,
-                        details.get("instructor", "Staff"),
+                        clean_sec_name,
+                        parse_instructor_name(details.get("instructor", "Staff")),
                         building,
-                        room_number,
+                        room,
                         mode,
                         parse_mode_to_is_in_person(mode),
                     )

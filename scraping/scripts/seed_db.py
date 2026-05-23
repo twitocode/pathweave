@@ -4,7 +4,7 @@ import re
 import psycopg2
 from psycopg2.extras import Json, execute_values
 from dotenv import load_dotenv
-from schedule_seed_transform import build_schedule_values
+from schedule_seed_transform import build_schedule_values, get_instructor_names
 
 # Load environment variables
 load_dotenv()
@@ -88,13 +88,39 @@ def seed():
     cur = conn.cursor()
 
     try:
+        # Load all possible schedules first so we can extract non-RMP teachers and course terms
+        with open("data/all_possible_schedules.json", "r") as f:
+            all_schedules = json.load(f)
+
+        schedule_teachers_to_courses = {}
+        for item in all_schedules:
+            course_code = item.get("course_code")
+            if not course_code:
+                continue
+            for combo in item.get("combinations", []):
+                section_details = {
+                    section.get("section"): section
+                    for section in combo.get("sections", [])
+                    if section.get("section")
+                }
+                for block in combo.get("schedule_blocks", []):
+                    section_name = block.get("section")
+                    details = section_details.get(section_name, {})
+                    instructor_str = details.get("instructor", "Staff")
+                    names = get_instructor_names(instructor_str)
+                    for name in names:
+                        schedule_teachers_to_courses.setdefault(name, set()).add(course_code)
+
         # 1. Load Teachers
         print("Seeding teachers...")
         with open("data/rmp_data.json", "r") as f:
             rmp_data = json.load(f)
         
         teacher_values = []
+        name_to_rmp_id = {}
         for prof in rmp_data.get("professors", []):
+            lower_name = prof["name"].strip().lower()
+            name_to_rmp_id[lower_name] = prof["id"]
             teacher_values.append((
                 prof["name"],
                 prof.get("avgRating", 0),
@@ -103,6 +129,21 @@ def seed():
                 prof["id"],
                 prof.get("numRatings", 0)
             ))
+            
+        # Add non-RMP teachers from schedules with default values
+        for name in schedule_teachers_to_courses.keys():
+            lower_name = name.lower()
+            if lower_name not in name_to_rmp_id:
+                fake_rmp_id = f"non_rmp_{name.replace(' ', '_').lower()}"
+                name_to_rmp_id[lower_name] = fake_rmp_id
+                teacher_values.append((
+                    name,
+                    0.0,
+                    0.0,
+                    "Unknown",
+                    fake_rmp_id,
+                    0
+                ))
         
         execute_values(cur, """
             INSERT INTO teacher (name, avg_rating, avg_difficulty, department, rmp_id, num_ratings)
@@ -117,10 +158,6 @@ def seed():
         print("Seeding courses...")
         with open("data/all_courses.json", "r") as f:
             all_courses = json.load(f)
-        
-        # Terms come from all_possible_schedules.json
-        with open("data/all_possible_schedules.json", "r") as f:
-            all_schedules = json.load(f)
         
         course_terms = {}
         for item in all_schedules:
@@ -195,7 +232,7 @@ def seed():
                 section,
                 instructor_name,
                 building,
-                room_number,
+                room,
                 mode,
                 is_in_person
             )
@@ -295,6 +332,27 @@ def seed():
                 course_teacher_values.append((course_id, teacher_id))
 
                 # Also link teacher to every program that includes this course
+                for program_id in course_to_programs.get(course_id, []):
+                    key = (teacher_id, program_id)
+                    if key not in seen_teacher_programs:
+                        seen_teacher_programs.add(key)
+                        teacher_program_values.append(key)
+                        
+        for name, courses in schedule_teachers_to_courses.items():
+            rmp_id = name_to_rmp_id.get(name.lower())
+            if not rmp_id:
+                continue
+            teacher_id = teacher_map.get(rmp_id)
+            if not teacher_id:
+                continue
+            for course_code in courses:
+                course_id = course_map.get(course_code)
+                if not course_id:
+                    continue
+                # Note: ON CONFLICT DO NOTHING gracefully handles duplicates if
+                # the RMP data already added this teacher-course relationship.
+                course_teacher_values.append((course_id, teacher_id))
+
                 for program_id in course_to_programs.get(course_id, []):
                     key = (teacher_id, program_id)
                     if key not in seen_teacher_programs:
