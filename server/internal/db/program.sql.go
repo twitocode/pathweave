@@ -7,6 +7,9 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getProgramIDByName = `-- name: GetProgramIDByName :one
@@ -85,9 +88,56 @@ type GetProgramRequirementsRow struct {
 	RequirementGroups []byte
 }
 
+// a very very disgusting query but it works
 func (q *Queries) GetProgramRequirements(ctx context.Context, name string) (GetProgramRequirementsRow, error) {
 	row := q.db.QueryRow(ctx, getProgramRequirements, name)
 	var i GetProgramRequirementsRow
 	err := row.Scan(&i.ProgramID, &i.ProgramName, &i.RequirementGroups)
 	return i, err
+}
+
+const getUserProgramID = `-- name: GetUserProgramID :one
+SELECT ud.program_id as codes
+FROM user_details AS ud
+WHERE ud.user_id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetUserProgramID(ctx context.Context, id uuid.UUID) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, getUserProgramID, id)
+	var codes pgtype.Int8
+	err := row.Scan(&codes)
+	return codes, err
+}
+
+const getUserProgramName = `-- name: GetUserProgramName :one
+SELECT p.name
+FROM user_details AS ud
+JOIN program p 
+  ON p.id = ud.program_id
+WHERE ud.user_id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetUserProgramName(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getUserProgramName, id)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
+const getUserProgramRequirements = `-- name: GetUserProgramRequirements :one
+SELECT p.requirement_codes as codes
+FROM user_details AS ud
+JOIN program p
+  ON p.id = ud.program_id
+WHERE ud.user_id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetUserProgramRequirements(ctx context.Context, id uuid.UUID) ([]string, error) {
+	row := q.db.QueryRow(ctx, getUserProgramRequirements, id)
+	var codes []string
+	err := row.Scan(&codes)
+	return codes, err
 }

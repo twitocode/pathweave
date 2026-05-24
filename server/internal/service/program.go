@@ -23,8 +23,13 @@ func NewProgramService(queries *db.Queries, log *zap.Logger) *ProgramService {
 	return &ProgramService{log: log, db: queries}
 }
 
-func (ps *ProgramService) GetProgramInfo(name string) {
+func (ps *ProgramService) GetUserProgramName(ctx context.Context, user *db.User) (string, error) {
+  name, err := ps.db.GetUserProgramName(ctx, user.ID)
+  if err != nil {
+    return "", err
+  }
 
+  return name, nil
 }
 
 func (ps *ProgramService) GetProgramRequirements(ctx context.Context, name string) (ProgramRequirements, error) {

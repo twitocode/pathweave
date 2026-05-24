@@ -91,7 +91,7 @@
 
 <form method="POST" class="contents" use:enhance>
 	<main
-		class="dotmatrix-bg relative flex min-h-screen flex-col font-geist-pixel text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+		class="dotmatrix-bg relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 	>
 		<Navbar />
 

@@ -37,17 +37,3 @@ SELECT *
 FROM user_details
 WHERE user_id = @id
 LIMIT 1;
-
--- name: GetUserProgramRequirements :one
-SELECT p.requirement_codes as codes
-FROM user_details AS ud
-JOIN program p
-  ON p.id = ud.program_id
-WHERE ud.user_id = @id
-LIMIT 1;
-
--- name: GetUserProgramID :one
-SELECT ud.program_id as codes
-FROM user_details AS ud
-WHERE ud.user_id = @id
-LIMIT 1;

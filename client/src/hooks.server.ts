@@ -66,7 +66,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 			if (user) {
 				if (isLoginRoute) {
-					throw redirect(303, user.onboarded ? '/home' : '/onboarding');
+					throw redirect(303, user.onboarded ? '/plans' : '/onboarding');
 				}
 
 				if (!user.onboarded && !isOnboardingRoute && !isAuthRoute) {
@@ -74,7 +74,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				}
 
 				if (user.onboarded && isOnboardingRoute) {
-					throw redirect(303, '/home');
+					throw redirect(303, '/plans');
 				}
 			}
 		}
@@ -88,4 +88,3 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
-

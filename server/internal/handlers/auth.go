@@ -78,7 +78,7 @@ func HandleCallback(cfg *config.Config, svc *service.AuthService) http.HandlerFu
 			return
 		}
 
-		redirectUri := fmt.Sprintf("%s/home?onboarded=%t", cfg.FrontendAppURL, onboardingState)
+		redirectUri := fmt.Sprintf("%s/plans?onboarded=%t", cfg.FrontendAppURL, onboardingState)
 		http.SetCookie(w, middleware.SessionCookie(sealedSession, r))
 		http.Redirect(w, r, redirectUri, http.StatusFound)
 	}

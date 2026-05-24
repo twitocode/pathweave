@@ -130,36 +130,6 @@ func (q *Queries) GetUserDetailsByID(ctx context.Context, id uuid.UUID) (UserDet
 	return i, err
 }
 
-const getUserProgramID = `-- name: GetUserProgramID :one
-SELECT ud.program_id as codes
-FROM user_details AS ud
-WHERE ud.user_id = $1
-LIMIT 1
-`
-
-func (q *Queries) GetUserProgramID(ctx context.Context, id uuid.UUID) (pgtype.Int8, error) {
-	row := q.db.QueryRow(ctx, getUserProgramID, id)
-	var codes pgtype.Int8
-	err := row.Scan(&codes)
-	return codes, err
-}
-
-const getUserProgramRequirements = `-- name: GetUserProgramRequirements :one
-SELECT p.requirement_codes as codes
-FROM user_details AS ud
-JOIN program p
-  ON p.id = ud.program_id
-WHERE ud.user_id = $1
-LIMIT 1
-`
-
-func (q *Queries) GetUserProgramRequirements(ctx context.Context, id uuid.UUID) ([]string, error) {
-	row := q.db.QueryRow(ctx, getUserProgramRequirements, id)
-	var codes []string
-	err := row.Scan(&codes)
-	return codes, err
-}
-
 const hasCompletedOnboarding = `-- name: HasCompletedOnboarding :one
 SELECT EXISTS(SELECT 1 FROM user_details WHERE user_id = $1 AND completed = true)::boolean
 `

@@ -15,3 +15,15 @@ export function getAuthLoginHref(): string {
 export function getAuthMeHref(): string {
 	return `${getApiOrigin()}/auth/me`;
 }
+
+export function getCsrfTokenHref(): string {
+	return `${getApiOrigin()}/csrf-token`;
+}
+
+export function getLogoutHref(): string {
+	return `${getApiOrigin()}/logout`;
+}
+
+export function getUserProgramName(): string {
+  return `${getApiOrigin()}/user/program`
+}

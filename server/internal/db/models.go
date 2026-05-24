@@ -27,6 +27,19 @@ type CourseTeacher struct {
 	TeacherID int32
 }
 
+type Plan struct {
+	ID        uuid.UUID
+	Title     string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	UserID    uuid.UUID
+}
+
+type PlanSection struct {
+	PlanID   uuid.UUID
+	CourseID int64
+}
+
 type Program struct {
 	ID                  int64
 	Name                string

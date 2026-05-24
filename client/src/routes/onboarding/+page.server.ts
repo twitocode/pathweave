@@ -56,7 +56,7 @@ export const actions: Actions = {
 		});
 
 		if (res.ok) {
-			throw redirect(303, '/home');
+			throw redirect(303, '/plans');
 		} else {
 			const data = await res.json();
 			if (data?.message === 'onboarding_failed') {

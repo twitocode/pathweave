@@ -16,16 +16,18 @@
 </svelte:head>
 
 <main
-	class="dotmatrix-bg relative min-h-screen font-geist-pixel text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+	class="dotmatrix-bg relative min-h-screen text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
-	<Navbar {isScrolled} loggedIn={data.user !== null} />
+	<Navbar {isScrolled} />
 
 	<!-- Hero -->
 	<section
 		class="mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-6 md:px-12"
 	>
 		<div class="max-w-3xl text-center">
-			<h1 class="mb-8 text-5xl leading-[1.1] font-bold tracking-tight sm:text-7xl md:text-9xl">
+			<h1
+				class="mb-8 font-geist-pixel text-5xl leading-[1.1] font-bold tracking-tight sm:text-7xl md:text-9xl"
+			>
 				Your schedule,<br />
 				<span class="text-brand-purple">optimized.</span>
 			</h1>
@@ -37,23 +39,23 @@
 				depending on your future goals, job schedule, professor ratings, and more.
 			</p>
 
-		{#if data.user?.onboarded}
-			<Button.Root
-				href="/home"
-				class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-8 text-xs font-bold tracking-[0.2em] text-white uppercase transition-all hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-			>
-				Go to Dashboard
-				<ArrowRight weight="bold" class="h-3.5 w-3.5" />
-			</Button.Root>
-		{:else if data.user}
-			<Button.Root
-				href="/onboarding"
-				class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-8 text-xs font-bold tracking-[0.2em] text-white uppercase transition-all hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-			>
-				Continue Onboarding
-				<ArrowRight weight="bold" class="h-3.5 w-3.5" />
-			</Button.Root>
-		{:else}
+			{#if data.user?.onboarded}
+				<Button.Root
+					href="/plans"
+					class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-8 text-xs font-bold tracking-[0.2em] text-white uppercase transition-all hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+				>
+					Go to Plans
+					<ArrowRight weight="bold" class="h-3.5 w-3.5" />
+				</Button.Root>
+			{:else if data.user}
+				<Button.Root
+					href="/onboarding"
+					class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-8 text-xs font-bold tracking-[0.2em] text-white uppercase transition-all hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+				>
+					Continue Onboarding
+					<ArrowRight weight="bold" class="h-3.5 w-3.5" />
+				</Button.Root>
+			{:else}
 				<Button.Root
 					href="/login"
 					class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-8 text-xs font-bold tracking-[0.2em] text-white uppercase transition-all hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
@@ -123,19 +125,21 @@
 				<div
 					class="flex gap-6 text-[10px] font-bold tracking-[0.2em] text-zinc-900 uppercase dark:text-zinc-300"
 				>
-				{#if data.user?.onboarded}
-					<a href="/home" class="transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-						>Go to Dashboard</a
-					>
-				{:else if data.user}
-					<a href="/onboarding" class="transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-						>Continue Onboarding</a
-					>
-				{:else}
-					<a href="/login" class="transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
-						>Login</a
-					>
-				{/if}
+					{#if data.user?.onboarded}
+						<a href="/plans" class="transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+							>Go to Plans</a
+						>
+					{:else if data.user}
+						<a
+							href="/onboarding"
+							class="transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+							>Continue Onboarding</a
+						>
+					{:else}
+						<a href="/login" class="transition-colors hover:text-zinc-900 dark:hover:text-zinc-100"
+							>Login</a
+						>
+					{/if}
 				</div>
 				<div class="text-[12px] tracking-[0.2em] text-zinc-800 dark:text-zinc-400">
 					© 2026 PathWeave. Made by <a
