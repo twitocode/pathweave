@@ -1,2 +1,4 @@
-*.json
+all_courses.json
+rmp_data.json
+
 scraper_errors.log
