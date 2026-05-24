@@ -49,9 +49,9 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Get("/search", handlers.HandleVectorSearchCourse(s.Course))
 	})
 
-  r.Route("/plan", func(r chi.Router) {
-    r.Use(mw.RequireAuth(cfg,s.Auth))
-  })
+	r.Route("/plan", func(r chi.Router) {
+		r.Use(mw.RequireAuth(cfg, s.Auth))
+	})
 
 	r.With(mw.RequireCSRF(cfg.SecretKey)).Post("/logout", handlers.HandleLogout(cfg, s.Auth))
 }

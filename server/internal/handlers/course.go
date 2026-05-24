@@ -3,8 +3,8 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
-  "slices"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/twitocode/pathweave/go-api/internal/common"
@@ -79,10 +79,10 @@ func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 			return
 		}
 
-    if !slices.Contains(validTerms, body.Term) {
-      common.WriteError(w, http.StatusBadRequest, "invalid term provided")
+		if !slices.Contains(validTerms, body.Term) {
+			common.WriteError(w, http.StatusBadRequest, "invalid term provided")
 			return
-    }
+		}
 
 		log := middleware.Logger(r)
 

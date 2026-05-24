@@ -60,7 +60,7 @@ func (ais *AIService) SearchQueryToJson(ctx context.Context, query string) (*Que
 
 	var data QueryMetadata
 	responseText := resp.Choices[0].Message.Content.Text
-  ais.log.Debug("ai response",zap.String("res",responseText))
+	ais.log.Debug("ai response", zap.String("res", responseText))
 	if err := json.Unmarshal([]byte(common.ExtractJSON(responseText)), &data); err != nil {
 		return nil, err
 	}

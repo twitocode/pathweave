@@ -103,7 +103,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 	}
 
 	schedules := make([]*Schedule, len(rows))
-  count := 0
+	count := 0
 	for i, r := range rows {
 		schedules[i] = &Schedule{
 			ID:            int(r.ID),
@@ -121,7 +121,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
 			AvgRating:     common.ToFloat64(r.AvgRating),
 		}
-    count++
+		count++
 	}
 
 	result := &SchedulesResult{
@@ -133,7 +133,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 
 type GroupedSectionResults struct {
 	Sections map[string][]*Schedule `json:"sections"`
-	Count     int                    `json:"count"`
+	Count    int                    `json:"count"`
 }
 
 func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, id int, term string) (*GroupedSectionResults, error) {
@@ -171,11 +171,10 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, id int, te
 
 	result := &GroupedSectionResults{
 		Sections: schedules,
-		Count:     count,
+		Count:    count,
 	}
 	return result, nil
 }
-
 
 func (cs *CourseService) CreateCourseEmbeddingsBatched(ctx context.Context, codes []string) error {
 	var embeddingStrings []string

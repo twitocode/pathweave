@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"testing"
 	"github.com/go-playground/validator/v10"
+	"testing"
 )
 
 type TestStruct struct {
@@ -15,7 +15,7 @@ type TestStruct2 struct {
 
 func TestValidator(t *testing.T) {
 	validate := validator.New()
-	
+
 	// Test 1: required on empty slice
 	ts1 := TestStruct{Courses: []string{}}
 	err1 := validate.Struct(ts1)
@@ -30,8 +30,8 @@ func TestValidator(t *testing.T) {
 	ts3 := TestStruct2{Courses: []string{}}
 	err3 := validate.Struct(ts3)
 	fmt.Printf("TestStruct2 dive empty slice err: %v\n", err3)
-    
-    // Test 4: dive,required on nil slice
+
+	// Test 4: dive,required on nil slice
 	ts4 := TestStruct2{}
 	err4 := validate.Struct(ts4)
 	fmt.Printf("TestStruct2 dive nil slice err: %v\n", err4)

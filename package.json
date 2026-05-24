@@ -1,0 +1,12 @@
+{
+	"name": "pathweave",
+	"private": true,
+	"scripts": {
+		"prepare": "husky",
+		"lint-staged": "lint-staged"
+	},
+	"devDependencies": {
+		"husky": "^9.1.7",
+		"lint-staged": "^16.1.2"
+	}
+}
