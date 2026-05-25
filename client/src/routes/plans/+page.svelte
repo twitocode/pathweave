@@ -11,7 +11,7 @@
 
 	let { data }: PageProps = $props();
 	let selectedTerm = $state('Fall 2027');
-$effect(() => console.log(data.plans))
+	$effect(() => console.log(data.plans));
 </script>
 
 <svelte:head>
@@ -23,7 +23,7 @@ $effect(() => console.log(data.plans))
 >
 	<Navbar />
 
-	<div class="mx-auto mt-40 flex flex-1 flex-col px-6 md:px-12">
+	<div class="mt-40 flex flex-1 flex-col px-6 md:px-12">
 		<span>You're in</span>
 		<h1 class="md:font-4xl text-3xl font-bold text-primary">{data.programName}</h1>
 

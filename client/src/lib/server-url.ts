@@ -25,5 +25,5 @@ export function getLogoutHref(): string {
 }
 
 export function getUserProgramName(): string {
-  return `${getApiOrigin()}/user/program`
+	return `${getApiOrigin()}/user/program`;
 }

@@ -5,7 +5,7 @@
 
 	let { isScrolled = false } = $props();
 
-  console.log(page.data.user)
+	console.log(page.data.user);
 	const loggedIn = $derived(page.data.user != null);
 	const path = $derived(page.data.path ?? page.url.pathname);
 </script>

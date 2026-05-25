@@ -10,12 +10,7 @@
 	import OnboardingStepIdentity from './onboarding-step-identity.svelte';
 	import OnboardingStepLife from './onboarding-step-life.svelte';
 	import OnboardingStepNav from './onboarding-step-nav.svelte';
-	import {
-		onboardingSchema,
-		step1Schema,
-		step2Schema,
-		type OnboardingFormData
-	} from './schema.js';
+	import { onboardingSchema, step1Schema, step2Schema, type OnboardingFormData } from './schema.js';
 
 	let { data }: { data: { form: SuperValidated<OnboardingFormData> } } = $props();
 
@@ -24,13 +19,11 @@
 		validators: zod4Client(onboardingSchema),
 		validationMethod: 'onblur',
 		resetForm: false,
-		dataType: 'json',
+		dataType: 'json'
 	});
 	const { form: formData, enhance, submitting, errors } = form;
 
 	let step = $state(1);
-
-
 
 	function validateStep1() {
 		const d = get(formData);

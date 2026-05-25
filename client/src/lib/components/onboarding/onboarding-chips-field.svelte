@@ -96,10 +96,13 @@
 						open = true;
 					}
 				}}
-				class={cn("min-w-24 flex-1 border-0 bg-transparent py-0 h-full text-xs placeholder:text-zinc-400 focus:outline-none focus:ring-0 dark:placeholder:text-zinc-500", {
-          "px-0": values.length == 0,
-          "px-1": values.length > 0,
-        })}
+				class={cn(
+					'h-full min-w-24 flex-1 border-0 bg-transparent py-0 text-xs placeholder:text-zinc-400 focus:ring-0 focus:outline-none dark:placeholder:text-zinc-500',
+					{
+						'px-0': values.length == 0,
+						'px-1': values.length > 0
+					}
+				)}
 				{placeholder}
 			/>
 
@@ -124,14 +127,8 @@
 					<Command.List class="max-h-48 overflow-y-auto">
 						<Command.Group>
 							{#each filteredSuggestions as s (s.value)}
-								<Command.Item
-									value={s.label}
-									onSelect={() => commit(s.value)}
-									class="text-xs"
-								>
-									<span class="whitespace-normal line-clamp-2 leading-snug"
-										>{s.label}</span
-									>
+								<Command.Item value={s.label} onSelect={() => commit(s.value)} class="text-xs">
+									<span class="line-clamp-2 leading-snug whitespace-normal">{s.label}</span>
 								</Command.Item>
 							{/each}
 						</Command.Group>

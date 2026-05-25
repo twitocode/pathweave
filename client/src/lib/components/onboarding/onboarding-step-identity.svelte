@@ -41,7 +41,8 @@
 			<Form.Control>
 				{#snippet children({ props })}
 					<Form.Label class={LABEL_CLASS}
-						>Program <span class="text-xl font-bold text-brand-red translate-y-[4px]">*</span></Form.Label
+						>Program <span class="translate-y-[4px] text-xl font-bold text-brand-red">*</span
+						></Form.Label
 					>
 					<Popover.Root bind:open>
 						<Popover.Trigger
@@ -92,7 +93,8 @@
 			<Form.Control>
 				{#snippet children({ props })}
 					<Form.Label class={LABEL_CLASS}
-						>Year <span class="text-xl font-bold text-brand-red translate-y-[4px]">*</span></Form.Label
+						>Year <span class="translate-y-[4px] text-xl font-bold text-brand-red">*</span
+						></Form.Label
 					>
 					<Select.Root type="single" bind:value={$formData.year}>
 						<Select.Trigger

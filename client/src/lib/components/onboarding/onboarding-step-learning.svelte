@@ -46,7 +46,7 @@
 							class="py-2"
 						/>
 						<div
-							class="relative flex w-full text-[9px] font-bold tracking-[0.15em] uppercase text-zinc-400 dark:text-zinc-500"
+							class="relative flex w-full text-[9px] font-bold tracking-[0.15em] text-zinc-400 uppercase dark:text-zinc-500"
 						>
 							<span class="w-1/3 text-left">Doesn't matter</span>
 							<span class="w-1/3 text-center">Can be alright</span>
@@ -83,7 +83,7 @@
 							class="py-2"
 						/>
 						<div
-							class="relative flex w-full text-[9px] font-bold tracking-[0.15em] uppercase text-zinc-400 dark:text-zinc-500"
+							class="relative flex w-full text-[9px] font-bold tracking-[0.15em] text-zinc-400 uppercase dark:text-zinc-500"
 						>
 							<span class="w-1/3 text-left">Traditional</span>
 							<span class="w-1/3 text-center">Interactive</span>

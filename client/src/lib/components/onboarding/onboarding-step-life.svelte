@@ -26,7 +26,8 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Form.Label class={LABEL_CLASS}
-							>Wake-Up Time <span class="text-xl font-bold text-brand-red translate-y-[4px]">*</span></Form.Label
+							>Wake-Up Time <span class="translate-y-[4px] text-xl font-bold text-brand-red">*</span
+							></Form.Label
 						>
 						<Select.Root type="single" bind:value={$formData.wakeUpTime}>
 							<Select.Trigger
@@ -57,7 +58,8 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Form.Label class={LABEL_CLASS}
-							>Bedtime <span class="text-xl font-bold text-brand-red translate-y-[4px]">*</span></Form.Label
+							>Bedtime <span class="translate-y-[4px] text-xl font-bold text-brand-red">*</span
+							></Form.Label
 						>
 						<Select.Root type="single" bind:value={$formData.bedtime}>
 							<Select.Trigger

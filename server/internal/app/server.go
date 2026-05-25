@@ -27,7 +27,7 @@ func NewServer(cfg *config.Config, s *Services, log *zap.Logger) *chi.Mux {
 	}))
 
 	r.Use(middleware.Recoverer)
-	r.Use(mw.LoggingMiddleware(log))
+	r.Use(mw.LoggingMiddleware(log, cfg.AppEnv != "production"))
 	r.Use(middleware.CleanPath)
 	r.Use(middleware.RedirectSlashes)
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))

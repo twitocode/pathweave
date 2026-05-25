@@ -167,9 +167,9 @@ func (s *AuthService) GetMe(ctx context.Context, user *db.User) (map[string]any,
 	}
 
 	if onboarded {
-		s.log.Info("user has already completed onboarding")
+		s.log.Debug("user has already completed onboarding")
 	} else {
-		s.log.Info("user hasn't completed onboarding")
+		s.log.Debug("user hasn't completed onboarding")
 	}
 
 	return map[string]any{

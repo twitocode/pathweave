@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	pgxvec "github.com/pgvector/pgvector-go/pgx"
-	"go.uber.org/zap"
 
 	"github.com/twitocode/pathweave/go-api/internal/app"
 	"github.com/twitocode/pathweave/go-api/internal/config"
@@ -66,7 +65,7 @@ func run(ctx context.Context, getenv func(string) string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("starting server", zap.String("port", cfg.Port))
+		logger.Info("starting server")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}

@@ -10,14 +10,12 @@
 			<div
 				class={cn(
 					'h-1 flex-1 transition-colors',
-					s <= step
-						? 'bg-zinc-900 dark:bg-zinc-100'
-						: 'bg-zinc-300 dark:bg-zinc-700'
+					s <= step ? 'bg-zinc-900 dark:bg-zinc-100' : 'bg-zinc-300 dark:bg-zinc-700'
 				)}
 			></div>
 		{/each}
 	</div>
-	<p class="text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-500 dark:text-zinc-400">
+	<p class="text-[10px] font-bold tracking-[0.2em] text-zinc-500 uppercase dark:text-zinc-400">
 		Step {step} of 3
 	</p>
 </div>

@@ -5,7 +5,7 @@
 </script>
 
 <div class="mb-10 text-center">
-	<h1 class="mb-3 text-3xl font-bold leading-tight tracking-tight sm:text-4xl md:text-5xl">
+	<h1 class="mb-3 text-3xl leading-tight font-bold tracking-tight sm:text-4xl md:text-5xl">
 		{STEP_META[step - 1].title}
 	</h1>
 	<p class="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">

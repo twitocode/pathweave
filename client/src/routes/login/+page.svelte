@@ -14,23 +14,20 @@
 	<Navbar />
 	<div class="flex flex-1 items-center justify-center px-6">
 		<div class="w-full max-w-sm">
-			<h1 class="mb-3 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
-				Sign in
-			</h1>
+			<h1 class="mb-3 text-3xl leading-tight font-bold tracking-tight sm:text-4xl">Sign in</h1>
 			<p class="mb-10 text-[14px] leading-relaxed tracking-wide text-zinc-900 dark:text-zinc-300">
 				Continue with your Google account to get started.
 			</p>
 
 			<a
 				href={getAuthLoginHref()}
-				class="inline-flex w-full items-center justify-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-6 py-3.5 text-xs font-bold tracking-[0.15em] uppercase text-white transition-all hover:bg-zinc-800"
+				class="inline-flex w-full items-center justify-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-6 py-3.5 text-xs font-bold tracking-[0.15em] text-white uppercase transition-all hover:bg-zinc-800"
 			>
 				<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center">
 					<Google />
 				</span>
 				Continue with Google
 			</a>
-      
 		</div>
 	</div>
 
@@ -45,4 +42,3 @@
 		</div>
 	</footer>
 </main>
-
