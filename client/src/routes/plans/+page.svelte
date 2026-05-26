@@ -7,6 +7,7 @@
 	import Input from '$lib/components/ui/input/input.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
 	import * as Select from '$lib/components/ui/select/index.js';
+	import { PlusIcon } from "phosphor-svelte";
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -19,17 +20,17 @@
 </svelte:head>
 
 <main
-	class="dotmatrix-bg flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+	class="mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-between py-5 text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
 	<Navbar />
 
 	<div class="mt-40 flex flex-1 flex-col px-6 md:px-12">
-		<span>You're in</span>
-		<h1 class="md:font-4xl text-3xl font-bold text-primary">{data.programName}</h1>
+		<span class="text-xl">You're in</span>
+		<h1 class="md:font-4xl text-3xl md:text-5xl font-bold text-primary font-gro">{data.programName}</h1>
 
-		<div class="my-20">
-			<span class="text-xl">Plans</span>
-			<div class="mt-4 grid gap-8 md:grid-cols-3">
+		<div class="my-20 space-y-8">
+			<span class="text-4xl  font-bold">Plans</span>
+			<div class="sm:grid-cols-2 mt-7 grid gap-8  md:grid-cols-3">
 				{#each data.plans as plan (plan.id)}
 					<PlanComp {plan} />
 				{/each}
@@ -69,7 +70,7 @@
 							</div>
 						</div>
 						<Dialog.Footer class="sm:justify-start">
-							<Button type="submit">Create</Button>
+							<Button type="submit" size="sm"> <PlusIcon /> Create</Button>
 						</Dialog.Footer>
 					</Dialog.Content>
 				</Dialog.Root>

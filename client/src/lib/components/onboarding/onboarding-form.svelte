@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { get } from 'svelte/store';
-	import { type SuperValidated, superForm } from 'sveltekit-superforms';
-	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import Navbar from '$lib/components/navbar.svelte';
+	import { get } from 'svelte/store';
+	import { superForm, type SuperValidated } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import OnboardingProgress from './onboarding-progress.svelte';
 	import OnboardingStepHeading from './onboarding-step-heading.svelte';
-	import OnboardingStepGoals from './onboarding-step-learning.svelte';
 	import OnboardingStepIdentity from './onboarding-step-identity.svelte';
+	import OnboardingStepGoals from './onboarding-step-learning.svelte';
 	import OnboardingStepLife from './onboarding-step-life.svelte';
 	import OnboardingStepNav from './onboarding-step-nav.svelte';
 	import { onboardingSchema, step1Schema, step2Schema, type OnboardingFormData } from './schema.js';
@@ -84,7 +84,7 @@
 
 <form method="POST" class="contents" use:enhance>
 	<main
-		class="dotmatrix-bg relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+		class=" relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 	>
 		<Navbar />
 

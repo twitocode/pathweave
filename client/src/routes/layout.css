@@ -2,14 +2,7 @@
 @import 'tw-animate-css';
 @import 'shadcn-svelte/tailwind.css';
 @import '@fontsource-variable/jetbrains-mono';
-
-@font-face {
-	font-family: 'Geist Pixel Circle';
-	src: url('/node_modules/geist/dist/fonts/geist-pixel/GeistPixel-Circle.woff2') format('woff2');
-	font-weight: 500;
-	font-style: normal;
-	font-display: swap;
-}
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 @plugin '@tailwindcss/forms';
@@ -18,12 +11,13 @@
 @theme {
 	--color-brand-bg: #ffffff;
 	--color-brand-yellow: #facc15;
-	--color-brand-purple: #a855f7;
+	--color-brand-purple: oklab(49.881% 0.07427 -0.26073);
 	--color-brand-dark: #000000;
 	--color-brand-gray: #71717a;
 	--color-brand-blue: #3b82f6;
 	--color-brand-red: #ef4444;
 	--font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+	--font-gro: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
 	--font-geist-pixel: 'Geist Pixel Circle', monospace;
 	--font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
@@ -54,7 +48,7 @@
 	--card-foreground: oklch(0 0 0);
 	--popover: oklch(1 0 0);
 	--popover-foreground: oklch(0 0 0);
-	--primary: oklch(0 0 0);
+	--primary: oklab(34.105999999999995% 0.00048 -0.00169);
 	--primary-foreground: oklch(1 0 0);
 	--secondary: oklch(0.96 0 0);
 	--secondary-foreground: oklch(0 0 0);
@@ -76,7 +70,7 @@
 	--card-foreground: oklch(1 0 0);
 	--popover: oklch(0.1 0 0);
 	--popover-foreground: oklch(1 0 0);
-	--primary: oklch(1 0 0);
+	--primary: oklab(90.22200000000001% 0.00614 -0.00952);
 	--primary-foreground: oklch(0 0 0);
 	--secondary: oklch(0.2 0 0);
 	--secondary-foreground: oklch(1 0 0);
@@ -107,27 +101,24 @@
 	color: white;
 }
 
-.dotmatrix-bg {
-	width: 100%;
-	min-width: 100%;
-	overflow-x: clip;
-	background-color: #f5f5f0;
-	background-image: radial-gradient(circle, #d4d4cc 0.8px, transparent 0.8px);
-	background-size: 20px 20px;
+@layer components {
+	.link {
+		@apply text-xs font-bold tracking-wider text-black/80 uppercase underline-offset-8 hover:text-black hover:underline dark:text-white/80 dark:hover:text-white;
+	}
 }
 
-html:has(.dotmatrix-bg),
-body:has(.dotmatrix-bg) {
+html:has(.),
+body:has(.) {
 	overflow-x: clip;
 	background-color: #f5f5f0;
 }
 
-.dark .dotmatrix-bg {
+.dark . {
 	background-color: #0c0c0c;
 	background-image: radial-gradient(circle, #2f2f2f 0.8px, transparent 0.8px);
 }
 
-.dark body:has(.dotmatrix-bg) {
+.dark body:has(.) {
 	background-color: #0c0c0c;
 }
 

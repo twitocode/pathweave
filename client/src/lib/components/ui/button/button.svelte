@@ -1,33 +1,34 @@
 <script lang="ts" module>
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
-	import { type VariantProps, tv } from 'tailwind-variants';
+	import { tv, type VariantProps } from 'tailwind-variants';
 
 	export const buttonVariants = tv({
-		base: "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-none border border-transparent bg-clip-padding text-xs font-medium focus-visible:ring-1 active:not-aria-[haspopup]:translate-y-px aria-invalid:ring-1 [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+		base: 'inline-flex items-center justify-center bg-brand-purple text-white rounded-2xl font-medium text-md drop-shadow-sm drop-shadow-[#c5aaf7] dark:drop-shadow-[#a87ff4] hover:bg-brand-purple/80 active:translate-y-[3px] text-shadow-xs hover:ring-2 hover:ring-[#AE87F7] hover:scale-105 ease-out transition shadow-[inset_0_0_10px_1px_#7233F3]',
 		variants: {
 			variant: {
-				default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
+				default:
+					'',
 				outline:
-					'border-border bg-background hover:bg-muted hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 aria-expanded:bg-muted aria-expanded:text-foreground',
+					'text-primary bg-transparent shadow-none  hover:bg-transparent hover:text-[#AE87F7] ring-2 hover:ring-[#AE87F7]',
 				secondary:
-					'bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+					'bg-secondary text-black/90 dark:text-white hover:bg-secondary/80 hover:ring-white/50 shadow-[inset_0_0_10px_1px_rgba(255,255,255,0.2)] drop-shadow-none',
 				ghost:
-					'hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground',
+					'text-primary bg-transparent shadow-none  hover:bg-brand-purple/10 hover:text-[#AE87F7]',
 				destructive:
-					'bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30',
-				link: 'text-primary underline-offset-4 hover:underline'
+					 'bg-red-500 text-white hover:bg-red-500/80 hover:ring-2 hover:ring-red-400 shadow-[inset_0_0_10px_1px_#b91c1c] drop-shadow-sm drop-shadow-[#fca5a5] dark:drop-shadow-[#ef4444]',
+				link: 'bg-transparent text-primary dark:text-white shadow-none drop-shadow-none hover:underline hover:bg-transparent hover:ring-0 hover:scale-105 active:translate-y-0 px-0 underline-offset-8'
 			},
 			size: {
 				default:
-					'h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2',
-				xs: "h-6 gap-1 rounded-none px-2 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-				sm: "h-7 gap-1 rounded-none px-2.5 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-				lg: 'h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2',
-				icon: 'size-8',
-				'icon-xs': "size-6 rounded-none [&_svg:not([class*='size-'])]:size-3",
-				'icon-sm': 'size-7 rounded-none',
-				'icon-lg': 'size-9'
+					"h-14 gap-4 px-8 text-2xl has-data-[icon=inline-end]:pr-6 has-data-[icon=inline-start]:pl-6 [&_svg:not([class*='size-'])]:size-7",
+				xs: "h-8 gap-1.5 px-3 text-xs has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 [&_svg:not([class*='size-'])]:size-3",
+				sm: "h-10 gap-2 px-4 text-sm has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
+				lg: 'h-16 gap-4 px-10 text-3xl has-data-[icon=inline-end]:pr-8 has-data-[icon=inline-start]:pl-8 [&_svg:not([class*="size-"])]:size-8',
+				icon: "size-10 shrink-0 p-0 [&_svg]:block [&_svg]:size-4 [&_svg]:shrink-0",
+				'icon-xs': "size-8 shrink-0 p-0 [&_svg]:block [&_svg]:size-3 [&_svg]:shrink-0",
+				'icon-sm': "size-9 shrink-0 p-0 [&_svg]:block [&_svg]:size-3.5 [&_svg]:shrink-0",
+				'icon-lg': "size-12 shrink-0 p-0 [&_svg]:block [&_svg]:size-5 [&_svg]:shrink-0"
 			}
 		},
 		defaultVariants: {

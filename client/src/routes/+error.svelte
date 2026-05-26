@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Navbar from '$lib/components/navbar.svelte';
-	import * as Button from '$lib/components/ui/button';
+	import { Button } from '$lib/components/ui/button';
 	import { ArrowLeft, House } from 'phosphor-svelte';
 
 	let scrollY = $state(0);
@@ -23,7 +23,7 @@
 </svelte:head>
 
 <main
-	class="dotmatrix-bg relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+	class=" relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
 	<Navbar {isScrolled} />
 
@@ -35,7 +35,7 @@
 		</p>
 
 		<h1
-			class="mb-6 text-center font-geist-pixel text-5xl leading-[1.1] font-bold tracking-tight sm:text-6xl md:text-7xl"
+			class="mb-6 text-center font-gro text-5xl leading-[1.1] font-bold tracking-tight sm:text-6xl md:text-7xl"
 		>
 			{title}
 		</h1>
@@ -45,23 +45,16 @@
 		</p>
 
 		<div class="flex flex-wrap items-center justify-center gap-4">
-			<Button.Root
-				href="/"
-				class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-8 text-xs font-bold tracking-[0.2em] text-white uppercase transition-all hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-			>
+			<Button href="/" size="sm">
 				<House weight="bold" class="h-3.5 w-3.5" />
 				Home
-			</Button.Root>
+			</Button>
 
 			{#if page.data.user}
-				<Button.Root
-					href="/plans"
-					variant="outline"
-					class="inline-flex h-12 items-center gap-3 rounded-none border-2 border-zinc-300 bg-transparent px-8 text-xs font-bold tracking-[0.2em] text-zinc-900 uppercase transition-all hover:border-zinc-900 dark:border-zinc-700 dark:text-zinc-100 dark:hover:border-zinc-100"
-				>
+				<Button href="/plans" variant="outline" size="sm">
 					<ArrowLeft weight="bold" class="h-3.5 w-3.5" />
 					Plans
-				</Button.Root>
+				</Button>
 			{/if}
 		</div>
 	</section>
