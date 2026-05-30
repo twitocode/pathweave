@@ -12,3 +12,5 @@ func AppendYearToTerm(term *string) string {
 	}
 	return *term + " " + strconv.Itoa(year)
 }
+
+var ValidTerms []string = []string{"Fall 2026", "Winter 2027", "Spring/Summer 2027"}

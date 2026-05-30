@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var validTerms []string = []string{"Fall 2026", "Winter 2027", "Spring/Summer 2027"}
 
 func HandleGetCourseByCode(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +78,7 @@ func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 			return
 		}
 
-		if !slices.Contains(validTerms, body.Term) {
+		if !slices.Contains(common.ValidTerms, body.Term) {
 			common.WriteError(w, http.StatusBadRequest, "invalid term provided")
 			return
 		}
