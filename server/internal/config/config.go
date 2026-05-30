@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
@@ -11,61 +13,43 @@ import (
 )
 
 type Config struct {
-	Host                 string
-	Port                 string
-	AppEnv               string
-	DatabaseURL          string
-	FrontendAppURL       string
-	WorkOSAPIKey         string
-	WorkOSClientID       string
-	WorkOSCookiePassword string
-	WorkOSRedirectURI    string
-	SecretKey            string
-	InternalServiceToken string
-	PythonAIBaseURL      string
-	AllowedOrigins       []string
-	OpenRouterAPIKey     string
-	DevBypassAuth        bool
-	DevBypassAuthEmail   string
+	Host                 string   `env:"HOST"`
+	Port                 string   `env:"PORT" envDefault:"8000"`
+	AppEnv               string   `env:"APP_ENV"`
+	DatabaseURL          string   `env:"DATABASE_URL"`
+	FrontendAppURL       string   `env:"FRONTEND_APP_URL"`
+	WorkOSAPIKey         string   `env:"WORKOS_API_KEY"`
+	WorkOSClientID       string   `env:"WORKOS_CLIENT_ID"`
+	WorkOSCookiePassword string   `env:"WORKOS_COOKIE_PASSWORD"`
+	WorkOSRedirectURI    string   `env:"WORKOS_REDIRECT_URI"`
+	SecretKey            string   `env:"SECRET_KEY"`
+	InternalServiceToken string   `env:"INTERNAL_SERVICE_TOKEN"`
+	PythonAIBaseURL      string   `env:"PYTHON_AI_BASE_URL"`
+	AllowedOrigins       []string `env:"ALLOWED_ORIGINS" envSeparator:","`
+	OpenRouterAPIKey     string   `env:"OPENROUTER_API_KEY"`
+	DevBypassAuth        bool     `env:"DEV_BYPASS_AUTH" envDefault:"false"`
+	DevBypassAuthEmail   string   `env:"DEV_BYPASS_AUTH_EMAIL" envDefault:"dev@example.com"`
 }
 
-func New(getenv func(string) string) *Config {
+func New(_ func(string) string) *Config {
 	_ = godotenv.Load(".env")
 
-	port := getenv("PORT")
-	if port == "" {
-		port = "8000"
+	cfg, err := env.ParseAs[Config]()
+	if err != nil {
+		panic(fmt.Errorf("parse environment config: %w", err))
 	}
 
-	allowedOrigins := []string{getenv("FRONTEND_APP_URL")}
-	if allowedOrigins[0] == "" {
-		allowedOrigins = []string{"http://localhost:3000"}
+	cfg.PythonAIBaseURL = strings.TrimRight(cfg.PythonAIBaseURL, "/")
+
+	if len(cfg.AllowedOrigins) == 0 {
+		if cfg.FrontendAppURL != "" {
+			cfg.AllowedOrigins = []string{cfg.FrontendAppURL}
+		} else {
+			cfg.AllowedOrigins = []string{"http://localhost:3000"}
+		}
 	}
 
-	devBypassAuth := strings.ToLower(strings.TrimSpace(getenv("DEV_BYPASS_AUTH"))) == "true"
-	devBypassAuthEmail := getenv("DEV_BYPASS_AUTH_EMAIL")
-	if devBypassAuthEmail == "" {
-		devBypassAuthEmail = "dev@example.com"
-	}
-
-	return &Config{
-		Host:                 getenv("HOST"),
-		Port:                 port,
-		AppEnv:               getenv("APP_ENV"),
-		DatabaseURL:          getenv("DATABASE_URL"),
-		FrontendAppURL:       getenv("FRONTEND_APP_URL"),
-		WorkOSAPIKey:         getenv("WORKOS_API_KEY"),
-		WorkOSClientID:       getenv("WORKOS_CLIENT_ID"),
-		WorkOSCookiePassword: getenv("WORKOS_COOKIE_PASSWORD"),
-		WorkOSRedirectURI:    getenv("WORKOS_REDIRECT_URI"),
-		SecretKey:            getenv("SECRET_KEY"),
-		InternalServiceToken: getenv("INTERNAL_SERVICE_TOKEN"),
-		OpenRouterAPIKey:     getenv("OPENROUTER_API_KEY"),
-		PythonAIBaseURL:      strings.TrimRight(getenv("PYTHON_AI_BASE_URL"), "/"),
-		AllowedOrigins:       allowedOrigins,
-		DevBypassAuth:        devBypassAuth,
-		DevBypassAuthEmail:   devBypassAuthEmail,
-	}
+	return &cfg
 }
 
 // NewLogger builds the application logger. Call once at startup and inject the
