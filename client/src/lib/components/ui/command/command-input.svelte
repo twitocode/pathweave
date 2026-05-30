@@ -16,6 +16,9 @@
 	<div
 		class="relative flex h-8 w-full min-w-0 items-center border-none border-input/30 bg-input/30 shadow-none"
 	>
+		<MagnifyingGlassIcon
+			class="pointer-events-none absolute start-2.5 top-1/2 size-4 shrink-0 -translate-y-1/2 opacity-50"
+		/>
 		<CommandPrimitive.Input
 			{value}
 			data-slot="command-input"
@@ -30,12 +33,9 @@
 					{...props}
 					bind:value
 					bind:ref
-					class="flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0"
+					class="flex-1 rounded-2xl border-0 bg-transparent ps-8 shadow-2xl ring-0 focus-visible:ring-0"
 				/>
 			{/snippet}
 		</CommandPrimitive.Input>
-		<div class="flex shrink-0 items-center justify-center pl-2 text-muted-foreground">
-			<MagnifyingGlassIcon class="size-4 shrink-0 opacity-50" />
-		</div>
 	</div>
 </div>

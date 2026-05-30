@@ -60,7 +60,7 @@
 						<Popover.Content
 							align="start"
 							sideOffset={0}
-							class="w-(--bits-popover-anchor-width) border border-zinc-200 bg-[#f5f5f0] p-0 dark:border-zinc-800 dark:bg-zinc-900"
+							class="w-(--bits-popover-anchor-width) overflow-hidden rounded-2xl border border-zinc-200 bg-[#f5f5f0] p-0 dark:border-zinc-800 dark:bg-zinc-900"
 						>
 							<Command.Root shouldFilter={false}>
 								<Command.Input placeholder="Search program..." bind:value={searchQuery} />

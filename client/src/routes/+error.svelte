@@ -4,9 +4,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ArrowLeft, House } from 'phosphor-svelte';
 
-	let scrollY = $state(0);
-	let isScrolled = $derived(scrollY > 50);
-
 	const isNotFound = $derived(page.status === 404);
 	const title = $derived(isNotFound ? 'Page not found' : 'Something went wrong');
 	const description = $derived(
@@ -16,8 +13,6 @@
 	);
 </script>
 
-<svelte:window bind:scrollY />
-
 <svelte:head>
 	<title>{title} | PathWeave</title>
 </svelte:head>
@@ -25,7 +20,7 @@
 <main
 	class=" relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
-	<Navbar {isScrolled} />
+	<Navbar />
 
 	<section
 		class="mx-auto flex max-w-7xl flex-1 flex-col items-center justify-center px-6 py-32 md:px-12"

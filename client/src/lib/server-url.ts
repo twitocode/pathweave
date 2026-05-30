@@ -24,6 +24,14 @@ export function getLogoutHref(): string {
 	return `${getApiOrigin()}/logout`;
 }
 
-export function getUserProgramName(): string {
+export function getUserProgramNameHref(): string {
 	return `${getApiOrigin()}/user/program`;
+}
+
+export function getPlanHref(id: string): string {
+	return `${getApiOrigin()}/plan/${id}`;
+}
+
+export function getAllPlansHref(): string {
+	return `${getApiOrigin()}/plan`;
 }

@@ -2,7 +2,7 @@ import coursesRaw from '$lib/data/courses.json';
 import programsRaw from '$lib/data/programs.json';
 
 export const FIELD_SHELL =
-	'rounded-none border border-zinc-200 bg-[#f5f5f0] px-3 py-2 text-xs text-zinc-900 transition-colors focus-within:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100';
+	'rounded-2xl border border-zinc-200 bg-[#f5f5f0] px-3 py-2 text-xs text-zinc-900 transition-colors focus-within:border-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100';
 
 export const LABEL_CLASS =
 	'flex items-center gap-1.5 text-[10px] font-bold tracking-[0.2em] uppercase text-zinc-600 dark:text-zinc-400';

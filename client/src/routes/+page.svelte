@@ -4,12 +4,8 @@
 	import { ArrowRight } from 'phosphor-svelte';
 	import type { PageProps } from './$types';
 
-	let scrollY = $state(0);
-	let isScrolled = $derived(scrollY > 50);
 	let { data }: PageProps = $props();
 </script>
-
-<svelte:window bind:scrollY />
 
 <svelte:head>
 	<title>PathWeave - Smart Course Planning for McMaster</title>
@@ -18,11 +14,11 @@
 <main
 	class=" relative min-h-screen text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
-	<Navbar {isScrolled} />
+	<Navbar />
 
 	<!-- Hero -->
 	<section
-		class="mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-6 md:px-12"
+		class="mx-auto flex min-h-[70vh] mt-20 max-w-7xl flex-col items-center justify-center px-6 md:px-12"
 	>
 		<div class="max-w-3xl text-center font-gro">
 			<h1 class="mb-8 text-5xl leading-[1.1] font-bold sm:text-7xl md:text-9xl">

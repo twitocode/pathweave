@@ -1,18 +1,25 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
+	import { scrollState } from '$lib/hooks/scroll.svelte';
 	import { mode, toggleMode } from 'mode-watcher';
 	import { MoonIcon, SignOutIcon, SunIcon } from 'phosphor-svelte';
 
-	let { isScrolled = false } = $props();
+	let scrollY = $state(0);
 
-	console.log(page.data.user);
+	$effect(() => {
+		scrollState.y = scrollY;
+	});
+
 	const loggedIn = $derived(page.data.user != null);
+	const onboarded = $derived(page.data.user?.onboarded);
 	const path = $derived(page.data.path ?? page.url.pathname);
 </script>
 
+<svelte:window bind:scrollY />
+
 <nav
-	class="fixed top-0 z-50 w-full transition-all duration-300 {isScrolled
+	class="fixed top-0 z-50 w-full transition-all duration-300 {scrollState.isScrolled
 		? 'bg-[#f5f5f0]/90 backdrop-blur-sm dark:bg-zinc-950/90'
 		: 'bg-transparent'}"
 >
@@ -26,7 +33,9 @@
 		<div class="flex items-center gap-3">
 			{#if page.url.pathname !== '/login' && !path.includes('plans')}
 				{#if loggedIn}
-					<a href="/plans" class="link"> Plans </a>
+					{#if onboarded}
+						<a href="/plans" class="link"> Your Plans </a>
+					{/if}
 				{:else}
 					<a href="/login" class="link"> Login </a>
 				{/if}

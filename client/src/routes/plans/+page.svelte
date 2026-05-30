@@ -1,5 +1,4 @@
 <script lang="ts">
-	import Navbar from '$lib/components/navbar.svelte';
 	import AddPlan from '$lib/components/plans/add-plan.svelte';
 	import PlanComp from '$lib/components/plans/plan.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -7,44 +6,47 @@
 	import Input from '$lib/components/ui/input/input.svelte';
 	import Label from '$lib/components/ui/label/label.svelte';
 	import * as Select from '$lib/components/ui/select/index.js';
-	import { PlusIcon } from "phosphor-svelte";
+	import { PlusIcon } from 'phosphor-svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	let selectedTerm = $state('Fall 2027');
-	$effect(() => console.log(data.plans));
+let selectedTerm = $state('Fall 2026');
+let title = $state('');
 </script>
 
 <svelte:head>
 	<title>Plans | PathWeave</title>
 </svelte:head>
 
-<main
-	class="mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-between py-5 text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
->
-	<Navbar />
+<div class="mt-40 flex flex-1 flex-col px-6 md:px-12">
+	<span class="text-xl">You're in</span>
+	<h1 class="md:font-4xl font-gro text-3xl font-bold text-primary md:text-5xl">
+		{data.programName}
+	</h1>
 
-	<div class="mt-40 flex flex-1 flex-col px-6 md:px-12">
-		<span class="text-xl">You're in</span>
-		<h1 class="md:font-4xl text-3xl md:text-5xl font-bold text-primary font-gro">{data.programName}</h1>
-
-		<div class="my-20 space-y-8">
-			<span class="text-4xl  font-bold">Plans</span>
-			<div class="sm:grid-cols-2 mt-7 grid gap-8  md:grid-cols-3">
-				{#each data.plans as plan (plan.id)}
-					<PlanComp {plan} />
-				{/each}
-				<Dialog.Root>
-					<Dialog.Trigger><AddPlan /></Dialog.Trigger>
-					<Dialog.Content class="sm:max-w-md">
-						<Dialog.Header>
-							<Dialog.Title>New Plan</Dialog.Title>
-							<Dialog.Description>Choose a new name and term</Dialog.Description>
-						</Dialog.Header>
-						<div class="flex items-center gap-2">
+	<div class="my-20 space-y-8">
+		<span class="text-4xl font-bold">Plans</span>
+		<div class="mt-7 grid gap-8 sm:grid-cols-2 md:grid-cols-3">
+			{#each data.plans as plan, i (plan.id)}
+				<PlanComp {plan} index={i} />
+			{/each}
+			<Dialog.Root>
+				<Dialog.Trigger><AddPlan index={data.plans?.length} /></Dialog.Trigger>
+				<Dialog.Content class="sm:max-w-md">
+					<Dialog.Header>
+						<Dialog.Title>New Plan</Dialog.Title>
+						<Dialog.Description>Choose a new name and term</Dialog.Description>
+					</Dialog.Header>
+					<form method="POST" action="?/createPlan" class="gap-4">
+						<div class="flex items-center gap-2 mb-4">
 							<div class="grid flex-1 gap-2">
 								<Label for="Title" class="sr-only">Title</Label>
-								<Input id="Title" placeholder="Ex. Commuting Plan" />
+								<Input
+									id="Title"
+									name="title"
+									placeholder="Ex. Commuting Plan"
+									bind:value={title}
+								/>
 							</div>
 							<div class="grid flex-1 gap-2">
 								<Label for="term" class="sr-only">Term</Label>
@@ -67,24 +69,15 @@
 										/>
 									</Select.Content>
 								</Select.Root>
+								<input type="hidden" name="term" value={selectedTerm} />
 							</div>
 						</div>
 						<Dialog.Footer class="sm:justify-start">
-							<Button type="submit" size="sm"> <PlusIcon /> Create</Button>
+							<Button type="submit" size="sm"><PlusIcon /> Create</Button>
 						</Dialog.Footer>
-					</Dialog.Content>
-				</Dialog.Root>
-			</div>
+					</form>
+				</Dialog.Content>
+			</Dialog.Root>
 		</div>
 	</div>
-
-	<footer
-		class="w-full border-t border-zinc-200 bg-[#f5f5f0]/80 py-6 backdrop-blur-sm dark:border-zinc-900 dark:bg-zinc-950/80"
-	>
-		<div class="mx-auto max-w-7xl px-6 md:px-12">
-			<div class="text-[12px] tracking-[0.2em] text-zinc-600 dark:text-zinc-400">
-				© 2026 PathWeave
-			</div>
-		</div>
-	</footer>
-</main>
+</div>

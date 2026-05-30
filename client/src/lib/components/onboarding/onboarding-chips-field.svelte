@@ -66,7 +66,7 @@
 			onclick={() => inputEl?.focus()}
 		>
 			{#each values as item, i (item + i)}
-				<button type="button" class={cn(chipClass, 'shrink-0')} onclick={() => onRemove(i)}>
+				<button type="button" class={cn(chipClass, 'shrink-0 rounded-2xl')} onclick={() => onRemove(i)}>
 					{item}
 					<span class="opacity-60">×</span>
 				</button>
@@ -121,7 +121,7 @@
 				onOpenAutoFocus={(e) => {
 					e.preventDefault();
 				}}
-				class="w-(--bits-popover-anchor-width) border border-zinc-200 bg-[#f5f5f0] p-0 dark:border-zinc-800 dark:bg-zinc-900"
+				class="w-(--bits-popover-anchor-width) overflow-hidden rounded-2xl border border-zinc-200 bg-[#f5f5f0] p-0 dark:border-zinc-800 dark:bg-zinc-900"
 			>
 				<Command.Root shouldFilter={false}>
 					<Command.List class="max-h-48 overflow-y-auto">
