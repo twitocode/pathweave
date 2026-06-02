@@ -84,8 +84,9 @@ func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 		}
 
 		log := middleware.Logger(r)
+		termString := common.TermNumberToString[body.Term]
 
-		res, err := cs.GetCourseSectionsByTerm(r.Context(), course_id, body.Term)
+		res, err := cs.GetCourseSectionsByTerm(r.Context(), course_id, termString)
 		if err != nil {
 			log.Error("error getting course schedules", zap.Error(err))
 		}

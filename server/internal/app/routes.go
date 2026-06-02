@@ -37,6 +37,8 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Use(mw.RequireAuth(cfg, s.Auth))
 
 		r.Get("/", handlers.HandleGetProgramRequirements(s.Program))
+		r.Get("/requirements/codes", handlers.HandleGetUserProgramRequirementCodes(s.Program))
+		r.Get("/requirements/codes/{term}", handlers.HandleGetUserProgramRequirementCodesAvailableInTerm(s.Program))
 	})
 
 	r.Route("/user", func(r chi.Router) {

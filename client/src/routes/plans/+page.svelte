@@ -11,6 +11,11 @@
 
 	let { data }: PageProps = $props();
 let selectedTerm = $state('Fall 2026');
+let termValue = $derived(
+	selectedTerm === 'Fall 2026' ? '2269' :
+	selectedTerm === 'Winter 2027' ? '2271' :
+	'2275'
+);
 let title = $state('');
 </script>
 
@@ -69,7 +74,7 @@ let title = $state('');
 										/>
 									</Select.Content>
 								</Select.Root>
-								<input type="hidden" name="term" value={selectedTerm} />
+								<input type="hidden" name="term" value={termValue} />
 							</div>
 						</div>
 						<Dialog.Footer class="sm:justify-start">

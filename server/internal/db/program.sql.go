@@ -126,6 +126,71 @@ func (q *Queries) GetUserProgramName(ctx context.Context, id uuid.UUID) (string,
 	return name, err
 }
 
+const getUserProgramRequirementCodes = `-- name: GetUserProgramRequirementCodes :many
+SELECT DISTINCT ucode::text
+FROM user_details AS ud
+JOIN program p
+  ON p.id = ud.program_id
+CROSS JOIN unnest(p.requirement_codes) AS ucode
+WHERE ud.user_id = $1
+`
+
+func (q *Queries) GetUserProgramRequirementCodes(ctx context.Context, id uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, getUserProgramRequirementCodes, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var ucode string
+		if err := rows.Scan(&ucode); err != nil {
+			return nil, err
+		}
+		items = append(items, ucode)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserProgramRequirementCodesAvailableInTerm = `-- name: GetUserProgramRequirementCodesAvailableInTerm :many
+SELECT DISTINCT ucode::text
+FROM user_details AS ud
+JOIN program p
+  ON p.id = ud.program_id
+CROSS JOIN unnest(p.requirement_codes) AS ucode
+JOIN course c ON c.code = ucode::text
+JOIN section s ON s.course_id = c.id
+WHERE ud.user_id = $1 AND s.term = $2
+`
+
+type GetUserProgramRequirementCodesAvailableInTermParams struct {
+	ID   uuid.UUID
+	Term string
+}
+
+func (q *Queries) GetUserProgramRequirementCodesAvailableInTerm(ctx context.Context, arg GetUserProgramRequirementCodesAvailableInTermParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, getUserProgramRequirementCodesAvailableInTerm, arg.ID, arg.Term)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var ucode string
+		if err := rows.Scan(&ucode); err != nil {
+			return nil, err
+		}
+		items = append(items, ucode)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserProgramRequirements = `-- name: GetUserProgramRequirements :one
 SELECT p.requirement_codes as codes
 FROM user_details AS ud
