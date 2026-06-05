@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import re
 import string
 import itertools
 import json
@@ -19,13 +20,14 @@ from rich.panel import Panel
 console = Console()
 worker_states = {}
 
-def update_worker(worker_id: int, status: str = None, current: str = None, courses: int = None, total_courses: int = None, errors: int = None, started: bool = False, finished: bool = False, reset: bool = False):
+def update_worker(worker_id: int, status: str = None, current: str = None, active: str = None, courses: int = None, total_courses: int = None, errors: int = None, started: bool = False, finished: bool = False, reset: bool = False):
     if worker_id not in worker_states or reset:
-        worker_states[worker_id] = {"status": "Waiting...", "current": "", "courses": 0, "total_courses": 0, "errors": 0, "start_time": None, "end_time": None}
+        worker_states[worker_id] = {"status": "Waiting...", "current": "", "active": "", "courses": 0, "total_courses": 0, "errors": 0, "start_time": None, "end_time": None}
     
     state = worker_states[worker_id]
     if status is not None: state["status"] = status
     if current is not None: state["current"] = current
+    if active is not None: state["active"] = active
     if courses is not None: state["courses"] += courses
     if total_courses is not None: state["total_courses"] += total_courses
     if errors is not None: state["errors"] += errors
@@ -42,6 +44,7 @@ def generate_table() -> Table:
     table = Table(show_header=True, header_style="bold magenta", expand=True)
     table.add_column("Worker", style="dim", width=10)
     table.add_column("Status", width=20)
+    table.add_column("Active", width=14)
     table.add_column("Current Task", width=50)
     table.add_column("Courses", justify="right")
     table.add_column("Errors", justify="right", style="red")
@@ -50,6 +53,8 @@ def generate_table() -> Table:
     for w_id in sorted(worker_states.keys()):
         state = worker_states[w_id]
         t = _fmt_time(_worker_elapsed(state))
+        active = state.get("active", "")
+        if len(active) > 12: active = active[:9] + "..."
         cur = state["current"]
         if len(cur) > 48: cur = cur[:45] + "..."
         
@@ -67,6 +72,7 @@ def generate_table() -> Table:
         table.add_row(
             f"Worker {w_id}", 
             status, 
+            active,
             cur, 
             f"{state['courses']} / {state['total_courses']}", 
             str(state["errors"]), 
@@ -96,6 +102,7 @@ HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 TARGET_TERMS = ["2269", "2271", "2275"]
+COURSE_CODE_RE = re.compile(r"\b[A-Z]{2,10}\s\d[A-Z0-9]{2,4}(?:\s+A/B)?\b")
 
 TERM_LABELS = {
     "2259": "Fall 2025",
@@ -198,6 +205,61 @@ def merge_term_results(all_terms_data: List[Dict[str, Any]], term_label: str, te
     return merged_terms
 
 
+def split_catalog_course_name(course_name: str) -> tuple[str, str]:
+    if not course_name or " - " not in course_name:
+        return "", (course_name or "").strip()
+    code, title = course_name.split(" - ", 1)
+    return code.strip(), title.strip()
+
+
+def build_course_title_code_map(courses: List[Dict[str, Any]]) -> Dict[str, str]:
+    title_to_code: Dict[str, str] = {}
+    ambiguous_titles: Set[str] = set()
+
+    for course in courses:
+        code = course.get("code")
+        title = course.get("name")
+        if not code or not title:
+            code, title = split_catalog_course_name(course.get("course_name", ""))
+
+        if not code or not title:
+            continue
+
+        if title in title_to_code and title_to_code[title] != code:
+            ambiguous_titles.add(title)
+            continue
+
+        title_to_code[title] = code
+
+    for title in ambiguous_titles:
+        title_to_code.pop(title, None)
+
+    return title_to_code
+
+
+def load_course_title_code_map() -> Dict[str, str]:
+    catalog_path = os.path.join(DATA_DIR, "all_courses.json")
+    try:
+        with open(catalog_path, "r") as f:
+            courses = json.load(f)
+    except Exception as e:
+        console.print(f"[yellow]Warning: failed to load course catalog for title lookup: {e}[/yellow]")
+        return {}
+    if not isinstance(courses, list):
+        return {}
+    return build_course_title_code_map(courses)
+
+
+def resolve_scraped_course_code(scraped_code: str, course_title: str, title_code_map: Dict[str, str]) -> str:
+    scraped_code = (scraped_code or "").strip()
+    course_title = (course_title or "").strip()
+
+    if COURSE_CODE_RE.fullmatch(scraped_code):
+        return scraped_code
+
+    return title_code_map.get(course_title, scraped_code or course_title)
+
+
 def parse_selected_letters(value: Optional[str]) -> List[str]:
     if not value:
         return list(string.ascii_uppercase)
@@ -230,6 +292,77 @@ def build_letter_chunks(letters: List[str], headless: bool, one_worker_per_lette
     return [letters], 1
 
 
+def validate_courses_per_worker(value) -> int:
+    try:
+        courses_per_worker = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("--courses-per-worker must be a positive integer")
+
+    if courses_per_worker < 1:
+        raise ValueError("--courses-per-worker must be at least 1")
+
+    return courses_per_worker
+
+
+def build_worker_assignments(
+    letters: List[str],
+    letter_counts: Dict[str, int],
+    courses_per_worker: int,
+) -> List[List[Dict[str, int | str]]]:
+    threshold = validate_courses_per_worker(courses_per_worker)
+    assignments: List[List[Dict[str, int | str]]] = []
+    packed_worker: List[Dict[str, int | str]] = []
+    packed_count = 0
+
+    def flush_packed_worker():
+        nonlocal packed_worker, packed_count
+        if packed_worker:
+            assignments.append(packed_worker)
+            packed_worker = []
+            packed_count = 0
+
+    for letter in letters:
+        count = int(letter_counts.get(letter, 0))
+        if count <= 0:
+            continue
+
+        if count > threshold:
+            flush_packed_worker()
+            for start in range(0, count, threshold):
+                end = min(start + threshold, count)
+                assignments.append([{
+                    "letter": letter,
+                    "start": start,
+                    "end": end,
+                    "total": count,
+                }])
+            continue
+
+        if packed_worker and packed_count + count > threshold:
+            flush_packed_worker()
+
+        packed_worker.append({
+            "letter": letter,
+            "start": 0,
+            "end": count,
+            "total": count,
+        })
+        packed_count += count
+
+    flush_packed_worker()
+    return assignments
+
+
+def format_assignment_label(assignment: Dict[str, int | str]) -> str:
+    letter = assignment["letter"]
+    start = int(assignment["start"])
+    end = int(assignment["end"])
+    total = int(assignment["total"])
+    if start == 0 and end == total:
+        return str(letter)
+    return f"{letter} {start + 1}-{end}"
+
+
 def cleanup_worker_files(prefix: str) -> None:
     pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
     for path in glob(pattern):
@@ -254,13 +387,135 @@ def _fmt_time(seconds: float) -> str:
     return f"{h}h {m}m {s}s"
 
 
-async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], term_code: str, existing_codes: Set[str] = None) -> List[Dict[str, Any]]:
+async def navigate_to_term_catalog(page: Page, worker_id: int, term_code: str) -> Frame | Page:
+    update_worker(worker_id, status="Logging In", current=f"Navigating to Mosaic login...")
+    await page.goto("https://mosaic.mcmaster.ca/psp/prcsprd/?cmd=login")
+
+    update_worker(worker_id, status="Logging In", current=f"Logging in...")
+    await page.fill("#userid", MOSAIC_USERNAME or "")
+    await page.fill("#pwd", MOSAIC_PASSWORD or "")
+    # Increase timeout dramatically for the login step
+    await page.click("input[name='Submit']", timeout=90000)
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=60000)
+    except Exception:
+        pass # sometimes networkidle never fires on Peoplesoft, we rely on the next visible locator anyway
+
+    update_worker(worker_id, status="Navigating", current=f"Waiting for Student Center...")
+    student_center_div = page.locator("#win0divPTNUI_LAND_REC_GROUPLET\\$7")
+    await student_center_div.wait_for(state="visible", timeout=90000)
+    await student_center_div.click()
+    await page.wait_for_load_state("networkidle")
+
+    await asyncio.sleep(2.3)
+    frame = await get_peoplesoft_frame(page)
+
+    update_worker(worker_id, status="Navigating", current=f"Clicking Course Search...")
+    search_link = frame.locator("#DERIVED_SSS_SCR_SSS_LINK_ANCHOR1")
+    await search_link.wait_for(state="visible", timeout=90000)
+    await search_link.click()
+    await page.wait_for_load_state("networkidle")
+
+    await asyncio.sleep(2.3)
+    frame = await get_peoplesoft_frame(page)
+
+    update_worker(worker_id, status="Navigating", current=f"Clicking Browse Course Catalog...")
+    browse_link = frame.locator("text=Browse Course Catalog")
+    await browse_link.wait_for(state="visible", timeout=15000)
+    await browse_link.click()
+    await page.wait_for_load_state("networkidle")
+
+    await asyncio.sleep(2.3)
+    frame = await get_peoplesoft_frame(page)
+
+    update_worker(worker_id, status="Filtering", current=f"Selecting Career and Term...")
+    career_select = frame.locator("#MCM_SSS_BCC_WRK_ACAD_CAREER")
+    await career_select.wait_for(state="visible", timeout=15000)
+    await career_select.select_option("UGRD")
+    await page.wait_for_load_state("networkidle")
+    await asyncio.sleep(2.3)
+    frame = await get_peoplesoft_frame(page)
+
+    term_select = frame.locator("#MCM_SSS_BCC_WRK_STRM")
+    await term_select.wait_for(state="visible", timeout=15000)
+    await term_select.select_option(term_code)
+    await page.wait_for_load_state("networkidle")
+    await asyncio.sleep(2.3)
+    frame = await get_peoplesoft_frame(page)
+
+    update_worker(worker_id, status="Searching", current=f"Executing Search...")
+    search_btn = frame.locator("#MCM_SSS_BCC_WRK_SSS_PB_CHANGE")
+    await search_btn.wait_for(state="visible", timeout=15000)
+    await search_btn.click()
+    await page.wait_for_load_state("networkidle")
+
+    await asyncio.sleep(2.7)
+    return await get_peoplesoft_frame(page)
+
+
+async def count_courses_for_letters(browser: Browser, term_code: str, letters: List[str]) -> Dict[str, int]:
+    context = await browser.new_context()
+    page = await context.new_page()
+    update_worker(0, status="Counting", current=f"Counting letters for {TERM_LABELS.get(term_code, term_code)}", started=True, reset=True)
+    counts: Dict[str, int] = {}
+
+    try:
+        frame = await navigate_to_term_catalog(page, 0, term_code)
+        for letter in letters:
+            update_worker(0, status="Counting", active=letter, current=f"Counting letter {letter}...")
+            letter_btn = frame.locator(f"#DERIVED_SSS_BCC_SSR_ALPHANUM_{letter}")
+
+            if await letter_btn.count() == 0 or not await letter_btn.first.is_visible():
+                counts[letter] = 0
+                continue
+
+            await letter_btn.click()
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(2.7)
+            frame = await get_peoplesoft_frame(page)
+
+            expand_btn = frame.locator("#DERIVED_SSS_BCC_SSS_EXPAND_ALL\\$97\\$")
+            if await expand_btn.count() > 0 and await expand_btn.first.is_visible():
+                await expand_btn.first.click()
+                await page.wait_for_load_state("networkidle")
+                await asyncio.sleep(2.7)
+                frame = await get_peoplesoft_frame(page)
+
+            prev_count = -1
+            stable_loops = 0
+            for _ in range(15):
+                curr_count = await frame.locator("a[id^='CRSE_TITLE$']").count()
+                if curr_count == prev_count:
+                    stable_loops += 1
+                    if stable_loops >= 2:
+                        break
+                else:
+                    stable_loops = 0
+                prev_count = curr_count
+                await asyncio.sleep(0.9)
+
+            counts[letter] = await frame.locator("a[id^='CRSE_TITLE$']").count()
+
+        update_worker(0, status="Finished", active="", current=f"Counted {len(letters)} letters.", finished=True)
+        return counts
+    finally:
+        try:
+            await asyncio.wait_for(context.close(), timeout=3.0)
+        except Exception:
+            pass
+
+
+async def scrape_letters(browser: Browser, worker_id: int, assignments: List[Dict[str, int | str]], term_code: str, existing_codes: Set[str] = None, title_code_map: Dict[str, str] = None) -> List[Dict[str, Any]]:
     worker_start = time.time()
-    update_worker(worker_id, status="Starting", current=f"Starting for letters: {letters}", started=True, reset=True)
+    assignment_labels = [format_assignment_label(assignment) for assignment in assignments]
+    update_worker(worker_id, status="Starting", current=f"Starting assignments: {assignment_labels}", started=True, reset=True)
     context = await browser.new_context()
     page = await context.new_page()
     all_scraped_data = []
     term_label = TERM_LABELS.get(term_code, term_code)
+    if title_code_map is None:
+        title_code_map = {}
     partial_path = os.path.join(DATA_DIR, f"mosaic_schedules.worker_{worker_id}_{term_code}.json")
 
     # Load existing progress if available
@@ -273,74 +528,15 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
             pass
 
     try:
-        update_worker(worker_id, status="Logging In", current=f"Navigating to Mosaic login...")
-        await page.goto("https://mosaic.mcmaster.ca/psp/prcsprd/?cmd=login")
+        frame = await navigate_to_term_catalog(page, worker_id, term_code)
 
-        update_worker(worker_id, status="Logging In", current=f"Logging in...")
-        await page.fill("#userid", MOSAIC_USERNAME or "")
-        await page.fill("#pwd", MOSAIC_PASSWORD or "")
-        # Increase timeout dramatically for the login step
-        await page.click("input[name='Submit']", timeout=90000)
-        
-        try:
-            await page.wait_for_load_state("networkidle", timeout=60000)
-        except Exception:
-            pass # sometimes networkidle never fires on Peoplesoft, we rely on the next visible locator anyway
-
-        update_worker(worker_id, status="Navigating", current=f"Waiting for Student Center...")
-        student_center_div = page.locator("#win0divPTNUI_LAND_REC_GROUPLET\\$7")
-        await student_center_div.wait_for(state="visible", timeout=90000)
-        await student_center_div.click()
-        await page.wait_for_load_state("networkidle")
-
-        await asyncio.sleep(2.3)
-        frame = await get_peoplesoft_frame(page)
-
-        update_worker(worker_id, status="Navigating", current=f"Clicking Course Search...")
-        search_link = frame.locator("#DERIVED_SSS_SCR_SSS_LINK_ANCHOR1")
-        await search_link.wait_for(state="visible", timeout=90000)
-        await search_link.click()
-        await page.wait_for_load_state("networkidle")
-
-        await asyncio.sleep(2.3)
-        frame = await get_peoplesoft_frame(page)
-
-        update_worker(worker_id, status="Navigating", current=f"Clicking Browse Course Catalog...")
-        browse_link = frame.locator("text=Browse Course Catalog")
-        await browse_link.wait_for(state="visible", timeout=15000)
-        await browse_link.click()
-        await page.wait_for_load_state("networkidle")
-
-        await asyncio.sleep(2.3)
-        frame = await get_peoplesoft_frame(page)
-
-        update_worker(worker_id, status="Filtering", current=f"Selecting Career and Term...")
-        career_select = frame.locator("#MCM_SSS_BCC_WRK_ACAD_CAREER")
-        await career_select.wait_for(state="visible", timeout=15000)
-        await career_select.select_option("UGRD")
-        await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(2.3)
-        frame = await get_peoplesoft_frame(page)
-
-        term_select = frame.locator("#MCM_SSS_BCC_WRK_STRM")
-        await term_select.wait_for(state="visible", timeout=15000)
-        await term_select.select_option(term_code)
-        await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(2.3)
-        frame = await get_peoplesoft_frame(page)
-
-        update_worker(worker_id, status="Searching", current=f"Executing Search...")
-        search_btn = frame.locator("#MCM_SSS_BCC_WRK_SSS_PB_CHANGE")
-        await search_btn.wait_for(state="visible", timeout=15000)
-        await search_btn.click()
-        await page.wait_for_load_state("networkidle")
-
-        await asyncio.sleep(2.7)
-        frame = await get_peoplesoft_frame(page)
-
-        for letter in letters:
+        for assignment in assignments:
+            letter = str(assignment["letter"])
+            range_start = int(assignment["start"])
+            range_end = int(assignment["end"])
+            active_label = format_assignment_label(assignment)
             letter_start = time.time()
-            update_worker(worker_id, status="Filtering", current=f"Filtering by letter {letter}...")
+            update_worker(worker_id, status="Filtering", active=active_label, current=f"Filtering by letter {letter}...")
             letter_btn = frame.locator(f"#DERIVED_SSS_BCC_SSR_ALPHANUM_{letter}")
             
             if await letter_btn.count() == 0 or not await letter_btn.first.is_visible():
@@ -427,9 +623,14 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
 
             course_links = frame.locator("a[id^='CRSE_TITLE$']")
             course_count = await course_links.count()
-            update_worker(worker_id, total_courses=course_count)
+            assignment_end = min(range_end, course_count)
+            assignment_count = max(0, assignment_end - range_start)
+            update_worker(worker_id, total_courses=assignment_count)
+            if assignment_count == 0:
+                update_worker(worker_id, status="Running", current=f"No courses in assigned range for {active_label}.")
+                continue
             
-            for i in range(course_count):
+            for i in range(range_start, assignment_end):
                 # Wait for the DOM to recover in case PeopleSoft did a postback after the modal closed
                 recovered = False
                 for _ in range(10):
@@ -455,7 +656,8 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                 code_info = course_code_map.get(idx_str, {})
                 subject = code_info.get("subject", "")
                 course_nbr = code_info.get("courseNbr", "")
-                course_code = f"{subject} {course_nbr}".strip() if subject and course_nbr else course_title.strip()
+                scraped_course_code = f"{subject} {course_nbr}".strip() if subject and course_nbr else course_title.strip()
+                course_code = resolve_scraped_course_code(scraped_course_code, course_title.strip(), title_code_map)
                 
                 # Skip if already scraped in a previous run
                 if any(c.get("course_code") == course_code for c in all_scraped_data):
@@ -658,11 +860,11 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
             update_worker(worker_id, current=f"Letter {letter} done in {_fmt_time(elapsed_letter)}.")
 
         elapsed_worker = time.time() - worker_start
-        update_worker(worker_id, status="Finished", current=f"Finished letters {letters}. Scraped {len(all_scraped_data)} courses in {_fmt_time(elapsed_worker)}.")
+        update_worker(worker_id, status="Finished", active="", current=f"Finished assignments {assignment_labels}. Scraped {len(all_scraped_data)} courses in {_fmt_time(elapsed_worker)}.")
         return all_scraped_data
 
     except Exception as e:
-        log_error(worker_id, f"Fatal error during letter chunk {letters}: {e}")
+        log_error(worker_id, f"Fatal error during assignments {assignment_labels}: {e}")
         update_worker(worker_id, status="Error", current=f"Error occurred: {e}", errors=1)
         raise e
     finally:
@@ -674,7 +876,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
             pass
 
 
-async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]], existing_codes: Set[str] = None) -> List[Dict[str, Any]]:
+async def scrape_term(browser: Browser, term_code: str, worker_assignments: List[List[Dict[str, int | str]]], existing_codes: Set[str] = None, title_code_map: Dict[str, str] = None) -> List[Dict[str, Any]]:
     """Run workers for a single term, return all course data for that term."""
     term_label = TERM_LABELS.get(term_code, term_code)
     console.print(f"\n{'='*60}")
@@ -684,14 +886,16 @@ async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]],
 
     if existing_codes is None:
         existing_codes = set()
+    if title_code_map is None:
+        title_code_map = {}
 
     tasks = []
-    for worker_id, chunk in enumerate(chunks, start=1):
-        async def worker_task(browser_inst, w_id, chk, t_code, exist_c):
+    for worker_id, assignments in enumerate(worker_assignments, start=1):
+        async def worker_task(browser_inst, w_id, assignment_group, t_code, exist_c, title_lookup):
             max_retries = 5
             for attempt in range(max_retries):
                 try:
-                    res = await scrape_letters(browser_inst, w_id, chk, t_code, exist_c)
+                    res = await scrape_letters(browser_inst, w_id, assignment_group, t_code, exist_c, title_lookup)
                     update_worker(w_id, current=f"Done.", finished=True)
                     return res
                 except Exception as e:
@@ -708,10 +912,10 @@ async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]],
                     
         tasks.append(
             asyncio.create_task(
-                worker_task(browser, worker_id, chunk, term_code, existing_codes)
+                worker_task(browser, worker_id, assignments, term_code, existing_codes, title_code_map)
             )
         )
-        if len(chunks) > 1:
+        if len(worker_assignments) > 1:
             stagger = random.uniform(1.3, 6.7)
             console.print(f"Staggering worker {worker_id} launch by {stagger:.1f} seconds...")
             await asyncio.sleep(stagger)
@@ -731,7 +935,7 @@ async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]],
     return term_results
 
 
-async def run(skip_existing: bool = False, letters: Optional[str] = None):
+async def run(skip_existing: bool = False, letters: Optional[str] = None, courses_per_worker: int = 100):
     console.print("Starting Parallel Mosaic Scraper...")
     if skip_existing:
         console.print("[cyan]--skip-existing enabled: only courses without DB sections for each term will be scraped and appended.[/cyan]")
@@ -739,12 +943,9 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None):
     output_path = os.path.join(DATA_DIR, "all_possible_schedules.json")
     
     selected_letters = parse_selected_letters(letters)
+    title_code_map = load_course_title_code_map()
+    worker_threshold = validate_courses_per_worker(courses_per_worker)
     append_output = skip_existing or letters is not None
-    chunks, num_workers = build_letter_chunks(
-        selected_letters,
-        HEADLESS,
-        one_worker_per_letter=letters is not None,
-    )
     if letters is not None:
         console.print(f"[cyan]Scraping selected letters only: {', '.join(selected_letters)}[/cyan]")
     
@@ -754,11 +955,10 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None):
         term_labels = [TERM_LABELS.get(term_code, term_code) for term_code in TARGET_TERMS]
         existing_codes_by_term = get_existing_section_codes_by_term(term_labels)
 
-    console.print(f"Divided {len(selected_letters)} letter(s) into {len(chunks)} chunk(s) for {num_workers} worker(s).")
+    console.print(f"Worker sizing: up to {worker_threshold} courses per worker.")
     console.print(f"Terms to scrape: {[TERM_LABELS.get(t, t) for t in TARGET_TERMS]}")
 
     run_start = time.time()
-    for i in range(1, num_workers + 1): update_worker(i) # init workers
     with Live(get_renderable=generate_table, refresh_per_second=4, console=console) as live:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=HEADLESS)
@@ -768,7 +968,18 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None):
                 for term_code in TARGET_TERMS:
                     term_label = TERM_LABELS.get(term_code, term_code)
                     existing_codes = existing_codes_by_term.get(term_label, set()) if skip_existing else set()
-                    term_results = await scrape_term(browser, term_code, chunks, existing_codes)
+                    letter_counts = await count_courses_for_letters(browser, term_code, selected_letters)
+                    worker_assignments = build_worker_assignments(selected_letters, letter_counts, worker_threshold)
+
+                    worker_states.clear()
+                    for i in range(1, len(worker_assignments) + 1):
+                        update_worker(i)
+
+                    console.print(f"{term_label}: counted {sum(letter_counts.values())} courses across {len(selected_letters)} letters; using {len(worker_assignments)} worker(s).")
+                    if not worker_assignments:
+                        term_results = []
+                    else:
+                        term_results = await scrape_term(browser, term_code, worker_assignments, existing_codes, title_code_map)
 
                     if append_output:
                         all_terms_data = merge_term_results(all_terms_data, term_label, term_results)
@@ -809,9 +1020,15 @@ if __name__ == "__main__":
         "--letters",
         help="Only scrape course-code prefixes matching these letters, e.g. C,D or CD. Selected-letter runs append/merge into the existing output.",
     )
+    parser.add_argument(
+        "--courses-per-worker",
+        default=100,
+        help="Maximum course count assigned to each worker after the per-letter count pass. Defaults to 100.",
+    )
     args = parser.parse_args()
     try:
         parse_selected_letters(args.letters)
+        courses_per_worker = validate_courses_per_worker(args.courses_per_worker)
     except ValueError as e:
         parser.error(str(e))
-    asyncio.run(run(skip_existing=args.skip_existing, letters=args.letters))
+    asyncio.run(run(skip_existing=args.skip_existing, letters=args.letters, courses_per_worker=courses_per_worker))

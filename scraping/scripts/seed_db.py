@@ -79,6 +79,46 @@ def split_course_name(course_name):
     return "", course_name.strip()
 
 
+def build_course_title_code_map(courses):
+    title_to_code = {}
+    ambiguous_titles = set()
+
+    for course in courses:
+        if "code" in course and "name" in course:
+            code = course["code"]
+            name = course["name"]
+        else:
+            code, name = split_course_name(course.get("course_name", ""))
+
+        if not code or not name:
+            continue
+
+        if name in title_to_code and title_to_code[name] != code:
+            ambiguous_titles.add(name)
+            continue
+
+        title_to_code[name] = code
+
+    for title in ambiguous_titles:
+        title_to_code.pop(title, None)
+
+    return title_to_code
+
+
+def resolve_schedule_course_id(course, course_map, title_code_map):
+    course_code = course.get("course_code")
+    course_id = course_map.get(course_code)
+    if course_id:
+        return course_id
+
+    course_title = course.get("course_title")
+    resolved_code = title_code_map.get(course_title)
+    if resolved_code:
+        return course_map.get(resolved_code)
+
+    return None
+
+
 def normalize_term(term_str):
     if not term_str:
         return "Unknown"
@@ -157,6 +197,7 @@ def seed():
         with open("data/all_courses.json", "r") as f:
             all_courses = json.load(f)
         
+        title_code_map = build_course_title_code_map(all_courses)
         course_values_dict = {}
         for course in all_courses:
             if "code" in course and "name" in course:
@@ -226,7 +267,7 @@ def seed():
             term = normalize_term(term_data.get("term", ""))
             for course in term_data.get("courses", []):
                 course_code = course.get("course_code")
-                course_id = course_map.get(course_code)
+                course_id = resolve_schedule_course_id(course, course_map, title_code_map)
                 if not course_id:
                     continue
 
@@ -418,7 +459,7 @@ def seed():
         for term_data in all_schedules:
             for course in term_data.get("courses", []):
                 course_code = course.get("course_code")
-                course_id = course_map.get(course_code)
+                course_id = resolve_schedule_course_id(course, course_map, title_code_map)
                 if not course_id:
                     continue
                 for section in course.get("sections", []):
