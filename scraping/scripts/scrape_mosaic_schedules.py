@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import os
 import string
@@ -6,8 +7,9 @@ import json
 import time
 import random
 from glob import glob
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from dotenv import load_dotenv
+import psycopg2
 from playwright.async_api import async_playwright, Page, Frame, Browser
 from rich.live import Live
 from rich.table import Table
@@ -91,6 +93,7 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 MOSAIC_USERNAME = os.getenv("MOSAIC_USERNAME")
 MOSAIC_PASSWORD = os.getenv("MOSAIC_PASSWORD")
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 TARGET_TERMS = ["2269", "2271", "2275"]
 
@@ -102,6 +105,130 @@ TERM_LABELS = {
     "2271": "Winter 2027",
     "2275": "Spring/Summer 2027",
 }
+
+
+def group_existing_section_codes_by_term(rows) -> Dict[str, Set[str]]:
+    grouped: Dict[str, Set[str]] = {}
+    for code, term in rows:
+        if not code or not term:
+            continue
+        grouped.setdefault(term, set()).add(code)
+    return grouped
+
+
+def get_existing_section_codes_by_term(term_labels: List[str]) -> Dict[str, Set[str]]:
+    """Query the database for course codes that already have sections by term."""
+    if not DATABASE_URL:
+        console.print("[yellow]Warning: DATABASE_URL not set, cannot check existing course sections.[/yellow]")
+        return {}
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT DISTINCT c.code, s.term
+            FROM course c
+            JOIN section s ON s.course_id = c.id
+            WHERE s.term = ANY(%s)
+            """,
+            (term_labels,),
+        )
+        grouped = group_existing_section_codes_by_term(cur.fetchall())
+        cur.close()
+        conn.close()
+        total_codes = sum(len(codes) for codes in grouped.values())
+        console.print(f"Found {total_codes} course/term pairs with sections in DB.")
+        return grouped
+    except Exception as e:
+        console.print(f"[yellow]Warning: Failed to query existing course sections: {e}[/yellow]")
+        return {}
+
+
+def load_existing_schedule_output(output_path: str) -> List[Dict[str, Any]]:
+    if not os.path.exists(output_path):
+        return []
+    try:
+        with open(output_path, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        console.print(f"[yellow]Warning: failed to load existing schedule output: {e}[/yellow]")
+        return []
+    if not isinstance(data, list):
+        console.print("[yellow]Warning: existing schedule output is not a term list; starting fresh.[/yellow]")
+        return []
+    return data
+
+
+def merge_term_results(all_terms_data: List[Dict[str, Any]], term_label: str, term_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged_terms: List[Dict[str, Any]] = []
+    found_term = False
+
+    for term_data in all_terms_data:
+        if term_data.get("term") != term_label:
+            merged_terms.append(term_data)
+            continue
+
+        found_term = True
+        merged_term = dict(term_data)
+        courses = list(merged_term.get("courses", []))
+        course_index = {
+            course.get("course_code"): index
+            for index, course in enumerate(courses)
+            if course.get("course_code")
+        }
+
+        for course in term_results:
+            course_code = course.get("course_code")
+            if course_code and course_code in course_index:
+                courses[course_index[course_code]] = course
+            else:
+                courses.append(course)
+                if course_code:
+                    course_index[course_code] = len(courses) - 1
+
+        merged_term["courses"] = courses
+        merged_terms.append(merged_term)
+
+    if not found_term:
+        merged_terms.append({
+            "term": term_label,
+            "courses": list(term_results),
+        })
+
+    return merged_terms
+
+
+def parse_selected_letters(value: Optional[str]) -> List[str]:
+    if not value:
+        return list(string.ascii_uppercase)
+
+    compact = value.replace(",", "").replace(" ", "").upper()
+    if not compact or any(letter not in string.ascii_uppercase for letter in compact):
+        raise ValueError("--letters must contain only letters A-Z, for example C,D or CD")
+
+    selected_letters: List[str] = []
+    seen: Set[str] = set()
+    for letter in compact:
+        if letter in seen:
+            continue
+        selected_letters.append(letter)
+        seen.add(letter)
+
+    return selected_letters
+
+
+def build_letter_chunks(letters: List[str], headless: bool, one_worker_per_letter: bool = False) -> tuple[List[List[str]], int]:
+    if one_worker_per_letter:
+        chunks = [[letter] for letter in letters]
+        return chunks, len(chunks)
+
+    if headless:
+        chunk_size = 2
+        chunks = [letters[i:i+chunk_size] for i in range(0, len(letters), chunk_size)]
+        return chunks, len(chunks)
+
+    return [letters], 1
+
 
 def cleanup_worker_files(prefix: str) -> None:
     pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
@@ -127,7 +254,7 @@ def _fmt_time(seconds: float) -> str:
     return f"{h}h {m}m {s}s"
 
 
-async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], term_code: str) -> List[Dict[str, Any]]:
+async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], term_code: str, existing_codes: Set[str] = None) -> List[Dict[str, Any]]:
     worker_start = time.time()
     update_worker(worker_id, status="Starting", current=f"Starting for letters: {letters}", started=True, reset=True)
     context = await browser.new_context()
@@ -161,21 +288,21 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
             pass # sometimes networkidle never fires on Peoplesoft, we rely on the next visible locator anyway
 
         update_worker(worker_id, status="Navigating", current=f"Waiting for Student Center...")
-        student_center_div = page.locator("#win0divPTNUI_LAND_REC_GROUPLET\\$8")
+        student_center_div = page.locator("#win0divPTNUI_LAND_REC_GROUPLET\\$7")
         await student_center_div.wait_for(state="visible", timeout=90000)
         await student_center_div.click()
         await page.wait_for_load_state("networkidle")
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(2.3)
         frame = await get_peoplesoft_frame(page)
 
         update_worker(worker_id, status="Navigating", current=f"Clicking Course Search...")
         search_link = frame.locator("#DERIVED_SSS_SCR_SSS_LINK_ANCHOR1")
-        await search_link.wait_for(state="visible", timeout=15000)
+        await search_link.wait_for(state="visible", timeout=90000)
         await search_link.click()
         await page.wait_for_load_state("networkidle")
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(2.3)
         frame = await get_peoplesoft_frame(page)
 
         update_worker(worker_id, status="Navigating", current=f"Clicking Browse Course Catalog...")
@@ -184,7 +311,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
         await browse_link.click()
         await page.wait_for_load_state("networkidle")
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(2.3)
         frame = await get_peoplesoft_frame(page)
 
         update_worker(worker_id, status="Filtering", current=f"Selecting Career and Term...")
@@ -192,14 +319,14 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
         await career_select.wait_for(state="visible", timeout=15000)
         await career_select.select_option("UGRD")
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(5)
+        await asyncio.sleep(2.3)
         frame = await get_peoplesoft_frame(page)
 
         term_select = frame.locator("#MCM_SSS_BCC_WRK_STRM")
         await term_select.wait_for(state="visible", timeout=15000)
         await term_select.select_option(term_code)
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(5)
+        await asyncio.sleep(2.3)
         frame = await get_peoplesoft_frame(page)
 
         update_worker(worker_id, status="Searching", current=f"Executing Search...")
@@ -208,7 +335,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
         await search_btn.click()
         await page.wait_for_load_state("networkidle")
 
-        await asyncio.sleep(6)
+        await asyncio.sleep(2.7)
         frame = await get_peoplesoft_frame(page)
 
         for letter in letters:
@@ -222,7 +349,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
 
             await letter_btn.click()
             await page.wait_for_load_state("networkidle")
-            await asyncio.sleep(6)
+            await asyncio.sleep(2.7)
             frame = await get_peoplesoft_frame(page)
 
             update_worker(worker_id, status="Filtering", current=f"Expanding all courses for {letter}...")
@@ -230,7 +357,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
             if await expand_btn.count() > 0 and await expand_btn.first.is_visible():
                 await expand_btn.first.click()
                 await page.wait_for_load_state("networkidle")
-                await asyncio.sleep(6)
+                await asyncio.sleep(2.7)
                 frame = await get_peoplesoft_frame(page)
 
             # Build a mapping of course_index -> {subject, course_nbr} from the expanded page.
@@ -296,7 +423,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                 else:
                     stable_loops = 0
                 prev_count = curr_count
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.9)
 
             course_links = frame.locator("a[id^='CRSE_TITLE$']")
             course_count = await course_links.count()
@@ -310,7 +437,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                     if await course_links.count() >= course_count:
                         recovered = True
                         break
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(0.9)
                 
                 if not recovered:
                     log_error(worker_id, f"DOM never recovered full course count after course index {i-1}. Breaking early.")
@@ -336,6 +463,11 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                     update_worker(worker_id, status="Running", current=f"Skipping already scraped: {course_code}")
                     continue
 
+                # Skip if the course already exists in the database (--skip-existing flag)
+                if existing_codes and course_code in existing_codes:
+                    update_worker(worker_id, status="Running", current=f"Skipping (in DB): {course_code}", total_courses=-1)
+                    continue
+
                 course_start = time.time()
                 # Reset modal container display in case they were nuked by JS override in a previous iteration
                 await page.evaluate('''() => {
@@ -347,7 +479,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                 update_worker(worker_id, status="Navigating", current=f"Clicking course: {course_code} ({course_title.strip()})")
                 await course_link.click()
                 await page.wait_for_load_state("networkidle")
-                await asyncio.sleep(5)
+                await asyncio.sleep(2.3)
 
                 modal_frame = None
                 view_sections_btn = None
@@ -379,7 +511,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                         log_error(worker_id, f"Error clicking view sections for course {course_code}: {e}")
                         update_worker(worker_id, status="Error", current=f"Error clicking view sections: {e}", errors=1)
                     
-                    await asyncio.sleep(8)
+                    await asyncio.sleep(3.6)
                     
                     parsed_frame = None
                     for f in page.frames:
@@ -391,7 +523,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                             pass
                             
                     if not parsed_frame:
-                        await asyncio.sleep(6)
+                        await asyncio.sleep(2.7)
                         for f in page.frames:
                             try:
                                 if await f.locator("tr[id^='trCLASS\\$']").count() > 0:
@@ -488,7 +620,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                                 pass
 
                 # Wait for the modal close action to process / postback
-                await asyncio.sleep(3)
+                await asyncio.sleep(1.3)
                 
                 # 3. UNCONDITIONALLY run JS force-close and DOM cleanup to guarantee no leftover frames/masks intercept subsequent clicks
                 await page.evaluate('''() => {
@@ -508,7 +640,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                         stuckModal.innerHTML = ''; // Delete any nested iframes completely
                     }
                 }''')
-                await asyncio.sleep(3)
+                await asyncio.sleep(1.3)
 
                 try:
                     await page.wait_for_load_state("networkidle", timeout=10000)
@@ -520,7 +652,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
                 elapsed_course = time.time() - course_start
                 update_worker(worker_id, current=f"Course done in {_fmt_time(elapsed_course)}.")
 
-                await asyncio.sleep(3)
+                await asyncio.sleep(1.3)
 
             elapsed_letter = time.time() - letter_start
             update_worker(worker_id, current=f"Letter {letter} done in {_fmt_time(elapsed_letter)}.")
@@ -532,7 +664,7 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
     except Exception as e:
         log_error(worker_id, f"Fatal error during letter chunk {letters}: {e}")
         update_worker(worker_id, status="Error", current=f"Error occurred: {e}", errors=1)
-        return all_scraped_data
+        raise e
     finally:
         elapsed_worker = time.time() - worker_start
         update_worker(worker_id, current=f"Closing context...")
@@ -540,27 +672,49 @@ async def scrape_letters(browser: Browser, worker_id: int, letters: List[str], t
             await asyncio.wait_for(context.close(), timeout=3.0)
         except Exception:
             pass
-        update_worker(worker_id, current=f"Done.", finished=True)
 
 
-async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]]) -> List[Dict[str, Any]]:
-    """Run 13 workers for a single term, return all course data for that term."""
+async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]], existing_codes: Set[str] = None) -> List[Dict[str, Any]]:
+    """Run workers for a single term, return all course data for that term."""
     term_label = TERM_LABELS.get(term_code, term_code)
     console.print(f"\n{'='*60}")
     console.print(f"Starting scrape for term: {term_label} ({term_code})")
     console.print(f"{'='*60}")
     term_start = time.time()
 
+    if existing_codes is None:
+        existing_codes = set()
+
     tasks = []
     for worker_id, chunk in enumerate(chunks, start=1):
+        async def worker_task(browser_inst, w_id, chk, t_code, exist_c):
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    res = await scrape_letters(browser_inst, w_id, chk, t_code, exist_c)
+                    update_worker(w_id, current=f"Done.", finished=True)
+                    return res
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        update_worker(w_id, status="Failed", current=f"Gave up after {max_retries} attempts.", finished=True)
+                        partial_path = os.path.join(DATA_DIR, f"mosaic_schedules.worker_{w_id}_{t_code}.json")
+                        try:
+                            with open(partial_path, "r") as f:
+                                return json.load(f)
+                        except Exception:
+                            return []
+                    update_worker(w_id, status="Retrying", current=f"Crashed. Retrying in 5s... ({attempt+2}/{max_retries})", errors=1)
+                    await asyncio.sleep(5)
+                    
         tasks.append(
             asyncio.create_task(
-                scrape_letters(browser, worker_id, chunk, term_code)
+                worker_task(browser, worker_id, chunk, term_code, existing_codes)
             )
         )
-        stagger = random.uniform(3, 15)
-        console.print(f"Staggering worker {worker_id} launch by {stagger:.1f} seconds...")
-        await asyncio.sleep(stagger)
+        if len(chunks) > 1:
+            stagger = random.uniform(1.3, 6.7)
+            console.print(f"Staggering worker {worker_id} launch by {stagger:.1f} seconds...")
+            await asyncio.sleep(stagger)
 
     worker_results = await asyncio.gather(*tasks, return_exceptions=True)
     term_results = []
@@ -577,42 +731,58 @@ async def scrape_term(browser: Browser, term_code: str, chunks: List[List[str]])
     return term_results
 
 
-async def run():
+async def run(skip_existing: bool = False, letters: Optional[str] = None):
     console.print("Starting Parallel Mosaic Scraper...")
+    if skip_existing:
+        console.print("[cyan]--skip-existing enabled: only courses without DB sections for each term will be scraped and appended.[/cyan]")
     os.makedirs(DATA_DIR, exist_ok=True)
+    output_path = os.path.join(DATA_DIR, "all_possible_schedules.json")
     
-    # Chunk alphabet into 13 workers, 2 letters each
-    alphabet = list(string.ascii_uppercase)
-    chunk_size = 2
-    chunks = [alphabet[i:i+chunk_size] for i in range(0, len(alphabet), chunk_size)]
+    selected_letters = parse_selected_letters(letters)
+    append_output = skip_existing or letters is not None
+    chunks, num_workers = build_letter_chunks(
+        selected_letters,
+        HEADLESS,
+        one_worker_per_letter=letters is not None,
+    )
+    if letters is not None:
+        console.print(f"[cyan]Scraping selected letters only: {', '.join(selected_letters)}[/cyan]")
     
-    console.print(f"Divided alphabet into {len(chunks)} chunks for 13 workers.")
+    # Fetch section coverage once, then use the term-specific set for each scrape.
+    existing_codes_by_term: Dict[str, Set[str]] = {}
+    if skip_existing:
+        term_labels = [TERM_LABELS.get(term_code, term_code) for term_code in TARGET_TERMS]
+        existing_codes_by_term = get_existing_section_codes_by_term(term_labels)
+
+    console.print(f"Divided {len(selected_letters)} letter(s) into {len(chunks)} chunk(s) for {num_workers} worker(s).")
     console.print(f"Terms to scrape: {[TERM_LABELS.get(t, t) for t in TARGET_TERMS]}")
 
     run_start = time.time()
-    for i in range(1, 14): update_worker(i) # init workers
+    for i in range(1, num_workers + 1): update_worker(i) # init workers
     with Live(get_renderable=generate_table, refresh_per_second=4, console=console) as live:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=HEADLESS)
             try:
-                all_terms_data = []
+                all_terms_data = load_existing_schedule_output(output_path) if append_output else []
 
                 for term_code in TARGET_TERMS:
                     term_label = TERM_LABELS.get(term_code, term_code)
-                    term_results = await scrape_term(browser, term_code, chunks)
+                    existing_codes = existing_codes_by_term.get(term_label, set()) if skip_existing else set()
+                    term_results = await scrape_term(browser, term_code, chunks, existing_codes)
 
-                    all_terms_data.append({
-                        "term": term_label,
-                        "courses": term_results
-                    })
+                    if append_output:
+                        all_terms_data = merge_term_results(all_terms_data, term_label, term_results)
+                    else:
+                        all_terms_data.append({
+                            "term": term_label,
+                            "courses": term_results
+                        })
 
                     # Save incremental progress after each term
-                    progress_path = os.path.join(DATA_DIR, "all_possible_schedules.json")
-                    with open(progress_path, "w") as f:
+                    with open(output_path, "w") as f:
                         json.dump(all_terms_data, f, indent=2)
                     console.print(f"Saved progress after {term_label}.")
 
-                output_path = os.path.join(DATA_DIR, "all_possible_schedules.json")
                 with open(output_path, "w") as f:
                     json.dump(all_terms_data, f, indent=2)
                 
@@ -627,4 +797,21 @@ async def run():
                 await browser.close()
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    parser = argparse.ArgumentParser(description="Scrape Mosaic course schedules")
+    parser.add_argument(
+        "--skip-existing",
+        "--missing-sections-only",
+        action="store_true",
+        dest="skip_existing",
+        help="Skip courses whose code already has sections in the database for the target term",
+    )
+    parser.add_argument(
+        "--letters",
+        help="Only scrape course-code prefixes matching these letters, e.g. C,D or CD. Selected-letter runs append/merge into the existing output.",
+    )
+    args = parser.parse_args()
+    try:
+        parse_selected_letters(args.letters)
+    except ValueError as e:
+        parser.error(str(e))
+    asyncio.run(run(skip_existing=args.skip_existing, letters=args.letters))

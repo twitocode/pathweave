@@ -157,7 +157,7 @@ def seed():
         with open("data/all_courses.json", "r") as f:
             all_courses = json.load(f)
         
-        course_values = []
+        course_values_dict = {}
         for course in all_courses:
             if "code" in course and "name" in course:
                 code = course["code"]
@@ -169,7 +169,7 @@ def seed():
                 continue
 
             level_number = extract_course_level_number(code)
-            course_values.append((
+            course_values_dict[code] = (
                 code,
                 name,
                 course.get("description", ""),
@@ -177,7 +177,9 @@ def seed():
                 course.get("prerequisites", []),
                 parse_units(course.get("units", "")),
                 level_number,
-            ))
+            )
+        
+        course_values = list(course_values_dict.values())
         
         execute_values(cur, """
             INSERT INTO course (code, name, description, restrictions, prerequisites, units, level_number)
