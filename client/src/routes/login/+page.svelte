@@ -14,9 +14,7 @@
 >
 	<Navbar />
 	<div class="flex flex-1 items-center justify-center px-6">
-		<div
-			class="w-full max-w-md  p-8 md:grid-cols-3"
-		>
+		<div class="w-full max-w-md p-8 md:grid-cols-3">
 			<h1 class="mb-3 text-3xl leading-tight font-bold tracking-tight sm:text-4xl">Sign in</h1>
 			<p class="mb-10 text-[14px] leading-relaxed tracking-wide text-zinc-900 dark:text-zinc-300">
 				Continue with your Google account to get started.

@@ -7,17 +7,19 @@ import (
 	"github.com/twitocode/pathweave/go-api/internal/config"
 	"github.com/twitocode/pathweave/go-api/internal/db"
 	"github.com/twitocode/pathweave/go-api/internal/service"
+	"github.com/twitocode/pathweave/go-api/internal/service/scraping"
 )
 
 type Services struct {
-	Auth       *service.AuthService
-	User       *service.UserService
-	Onboarding *service.OnboardingService
-	Program    *service.ProgramService
-	Course     *service.CourseService
-	Embedding  *service.EmbeddingService
-	AI         *service.AIService
-	Planner    *service.PlannerService
+	Auth         *service.AuthService
+	User         *service.UserService
+	Onboarding   *service.OnboardingService
+	Program      *service.ProgramService
+	Course       *service.CourseService
+	Embedding    *service.EmbeddingService
+	AI           *service.AIService
+	Planner      *service.PlannerService
+	ScrapeIngest *scraping.ScrapeIngestService
 }
 
 func NewServices(cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger) *Services {
@@ -27,13 +29,14 @@ func NewServices(cfg *config.Config, pool *pgxpool.Pool, log *zap.Logger) *Servi
 	ais := service.NewAIService(cfg, queries, log)
 
 	return &Services{
-		Auth:       service.NewAuthService(cfg, queries, log),
-		User:       service.NewUserService(queries, log),
-		Onboarding: service.NewOnboardingService(queries, log),
-		Course:     service.NewCourseService(queries, log, es, ais),
-		Program:    service.NewProgramService(queries, log),
-		Embedding:  es,
-		AI:         ais,
-		Planner:    service.NewPlannerService(queries, log),
+		Auth:         service.NewAuthService(cfg, queries, log),
+		User:         service.NewUserService(queries, log),
+		Onboarding:   service.NewOnboardingService(queries, log),
+		Course:       service.NewCourseService(queries, log, es, ais),
+		Program:      service.NewProgramService(queries, log),
+		Embedding:    es,
+		AI:           ais,
+		Planner:      service.NewPlannerService(queries, log),
+		ScrapeIngest: scraping.NewScrapeIngestService(queries, pool, log),
 	}
 }

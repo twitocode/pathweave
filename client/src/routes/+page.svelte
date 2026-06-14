@@ -19,7 +19,7 @@
 
 	<!-- Hero -->
 	<section
-		class="mx-auto flex min-h-[70vh] mt-20 max-w-7xl flex-col items-center justify-center px-6 md:px-12"
+		class="mx-auto mt-20 flex min-h-[70vh] max-w-7xl flex-col items-center justify-center px-6 md:px-12"
 	>
 		<div class="max-w-3xl text-center font-gro">
 			<h1 class="mb-8 text-5xl leading-[1.1] font-bold sm:text-7xl md:text-9xl">
@@ -112,19 +112,11 @@
 					class="flex gap-6 text-[10px] font-bold tracking-[0.2em] text-zinc-900 uppercase dark:text-zinc-300"
 				>
 					{#if data.user?.onboarded}
-						<a href={resolve('/plans')} class="link"
-							>Go to Plans</a
-						>
+						<a href={resolve('/plans')} class="link">Go to Plans</a>
 					{:else if data.user}
-						<a
-							href={resolve('/onboarding')}
-							class="link"
-							>Continue Onboarding</a
-						>
+						<a href={resolve('/onboarding')} class="link">Continue Onboarding</a>
 					{:else}
-						<a href={resolve('/login')} class="link"
-							>Login</a
-						>
+						<a href={resolve('/login')} class="link">Login</a>
 					{/if}
 				</div>
 				<div class="text-[12px] tracking-[0.2em] text-zinc-800 dark:text-zinc-400">

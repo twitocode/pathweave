@@ -10,13 +10,11 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-let selectedTerm = $state('Fall 2026');
-let termValue = $derived(
-	selectedTerm === 'Fall 2026' ? '2269' :
-	selectedTerm === 'Winter 2027' ? '2271' :
-	'2275'
-);
-let title = $state('');
+	let selectedTerm = $state('Fall 2026');
+	let termValue = $derived(
+		selectedTerm === 'Fall 2026' ? '2269' : selectedTerm === 'Winter 2027' ? '2271' : '2275'
+	);
+	let title = $state('');
 </script>
 
 <svelte:head>
@@ -43,7 +41,7 @@ let title = $state('');
 						<Dialog.Description>Choose a new name and term</Dialog.Description>
 					</Dialog.Header>
 					<form method="POST" action="?/createPlan" class="gap-4">
-						<div class="flex items-center gap-2 mb-4">
+						<div class="mb-4 flex items-center gap-2">
 							<div class="grid flex-1 gap-2">
 								<Label for="Title" class="sr-only">Title</Label>
 								<Input

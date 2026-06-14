@@ -29,11 +29,11 @@
 		aria-hidden="true"
 	></div>
 
-	<a href={resolve(`/plans/${plan.id}`)} class="absolute inset-0 z-0" aria-label="Open {plan.title}"></a>
+	<a href={resolve(`/plans/${plan.id}`)} class="absolute inset-0 z-0" aria-label="Open {plan.title}"
+	></a>
 
 	<div class="flex flex-5 flex-col space-y-4">
-		<span
-			class="pointer-events-none relative z-10 text-3xl text-pretty lg:text-4xl"
+		<span class="pointer-events-none relative z-10 text-3xl text-pretty lg:text-4xl"
 			>{plan.title}</span
 		>
 	</div>
