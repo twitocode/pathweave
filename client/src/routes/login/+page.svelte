@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { getAuthLoginHref } from '$lib/server-url';
-	import Google from '$lib/components/svg/google.svelte';
 	import Navbar from '$lib/components/navbar.svelte';
+	import Google from '$lib/components/svg/google.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { getAuthLoginHref } from '$lib/server-url';
 </script>
 
 <svelte:head>
@@ -9,25 +10,24 @@
 </svelte:head>
 
 <main
-	class="dotmatrix-bg relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+	class=" relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
 	<Navbar />
 	<div class="flex flex-1 items-center justify-center px-6">
-		<div class="w-full max-w-sm">
+		<div
+			class="w-full max-w-md  p-8 md:grid-cols-3"
+		>
 			<h1 class="mb-3 text-3xl leading-tight font-bold tracking-tight sm:text-4xl">Sign in</h1>
 			<p class="mb-10 text-[14px] leading-relaxed tracking-wide text-zinc-900 dark:text-zinc-300">
 				Continue with your Google account to get started.
 			</p>
 
-			<a
-				href={getAuthLoginHref()}
-				class="inline-flex w-full items-center justify-center gap-3 rounded-none border-2 border-zinc-900 bg-zinc-900 px-6 py-3.5 text-xs font-bold tracking-[0.15em] text-white uppercase transition-all hover:bg-zinc-800"
-			>
-				<span class="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+			<Button href={getAuthLoginHref()} variant="secondary" size="sm">
+				<span class="inline-flex size-6 shrink-0 items-center justify-center">
 					<Google />
 				</span>
 				Continue with Google
-			</a>
+			</Button>
 		</div>
 	</div>
 

@@ -46,3 +46,22 @@ func (ps *ProgramService) GetProgramRequirements(ctx context.Context, name strin
 	}, nil
 
 }
+
+func (ps *ProgramService) GetUserProgramRequirementCodes(ctx context.Context, user *db.User) ([]string, error) {
+	codes, err := ps.db.GetUserProgramRequirementCodes(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
+func (ps *ProgramService) GetUserProgramRequirementCodesAvailableInTerm(ctx context.Context, user *db.User, term string) ([]string, error) {
+	codes, err := ps.db.GetUserProgramRequirementCodesAvailableInTerm(ctx, db.GetUserProgramRequirementCodesAvailableInTermParams{
+		ID:   user.ID,
+		Term: term,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return codes, nil
+}

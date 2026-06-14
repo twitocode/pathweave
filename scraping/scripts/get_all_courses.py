@@ -32,7 +32,7 @@ async def fetch_and_parse_course(
     async with semaphore:
         coid = item['coid']
         try:
-            response = await context.request.get(base_url + coid)
+            response = await context.request.get(base_url + coid, ignore_https_errors=True)
             if response.status != 200:
                 return None
                 
@@ -210,7 +210,7 @@ def parse_course_links_from_html(html: str) -> List[Dict[str, str]]:
 
 
 async def read_course_links_via_request(context, target_url: str) -> List[Dict[str, str]]:
-    response = await context.request.get(target_url)
+    response = await context.request.get(target_url, ignore_https_errors=True)
     if response.status != 200:
         return []
     html = await response.text()
@@ -227,14 +227,14 @@ async def scrape_course_page(
     request_semaphore: asyncio.Semaphore,
     page_nav_semaphore: asyncio.Semaphore,
 ) -> List[Dict[str, Any]]:
-    context = await browser.new_context(ignore_https_errors=True)
-    page = await context.new_page()
-    partial_path = os.path.join(DATA_DIR, f"all_courses.worker_{worker_id}.json")
+    async with page_nav_semaphore:
+        context = await browser.new_context(ignore_https_errors=True)
+        page = await context.new_page()
+        partial_path = os.path.join(DATA_DIR, f"all_courses.worker_{worker_id}.json")
 
-    try:
-        target_url = build_page_url(catoid, navoid, page_num)
-        print(f"[worker {worker_id}] Navigating directly to page {page_num}...")
-        async with page_nav_semaphore:
+        try:
+            target_url = build_page_url(catoid, navoid, page_num)
+            print(f"[worker {worker_id}] Navigating directly to page {page_num}...")
             await page.goto(target_url, wait_until="networkidle")
 
             print(f"\n--- [worker {worker_id}] Processing Page {page_num} ---")
@@ -271,32 +271,32 @@ async def scrape_course_page(
                         f"[worker {worker_id}] Page {page_num} still has 0 course links after retries."
                     )
 
-        page_course_codes = [extract_course_code(item.get("text", "")) for item in course_links]
-        page_course_codes = [code for code in page_course_codes if code]
-        first_code = page_course_codes[0] if page_course_codes else "N/A"
-        last_code = page_course_codes[-1] if page_course_codes else "N/A"
-        print(
-            f"[worker {worker_id}] Page {page_num} course range: "
-            f"first={first_code}, last={last_code}, count={len(course_links)}"
-        )
+            page_course_codes = [extract_course_code(item.get("text", "")) for item in course_links]
+            page_course_codes = [code for code in page_course_codes if code]
+            first_code = page_course_codes[0] if page_course_codes else "N/A"
+            last_code = page_course_codes[-1] if page_course_codes else "N/A"
+            print(
+                f"[worker {worker_id}] Page {page_num} course range: "
+                f"first={first_code}, last={last_code}, count={len(course_links)}"
+            )
 
-        tasks = [
-            fetch_and_parse_course(context, base_preview_url, item, request_semaphore)
-            for item in course_links
-        ]
-        page_results = await asyncio.gather(*tasks)
-        valid_results = [r for r in page_results if r is not None]
-        with open(partial_path, "w") as f:
-            json.dump(valid_results, f, indent=2)
-        print(f"[worker {worker_id}] Finished page {page_num} ({len(valid_results)} courses).")
-        return valid_results
-    except Exception as e:
-        print(f"[worker {worker_id}] Error on page {page_num}: {e}")
-        with open(partial_path, "w") as f:
-            json.dump([], f, indent=2)
-        return []
-    finally:
-        await context.close()
+            tasks = [
+                fetch_and_parse_course(context, base_preview_url, item, request_semaphore)
+                for item in course_links
+            ]
+            page_results = await asyncio.gather(*tasks)
+            valid_results = [r for r in page_results if r is not None]
+            with open(partial_path, "w") as f:
+                json.dump(valid_results, f, indent=2)
+            print(f"[worker {worker_id}] Finished page {page_num} ({len(valid_results)} courses).")
+            return valid_results
+        except Exception as e:
+            print(f"[worker {worker_id}] Error on page {page_num}: {e}")
+            with open(partial_path, "w") as f:
+                json.dump([], f, indent=2)
+            return []
+        finally:
+            await context.close()
 
 
 async def scrape_courses():

@@ -30,6 +30,7 @@ type CourseTeacher struct {
 type Plan struct {
 	ID        uuid.UUID
 	Title     string
+	Term      string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 	UserID    uuid.UUID

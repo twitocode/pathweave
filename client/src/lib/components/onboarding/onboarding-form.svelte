@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { get } from 'svelte/store';
-	import { type SuperValidated, superForm } from 'sveltekit-superforms';
-	import { zod4Client } from 'sveltekit-superforms/adapters';
+	import { resolve } from '$app/paths';
 	import Navbar from '$lib/components/navbar.svelte';
+	import { get } from 'svelte/store';
+	import { superForm, type SuperValidated } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import OnboardingProgress from './onboarding-progress.svelte';
 	import OnboardingStepHeading from './onboarding-step-heading.svelte';
-	import OnboardingStepGoals from './onboarding-step-learning.svelte';
 	import OnboardingStepIdentity from './onboarding-step-identity.svelte';
+	import OnboardingStepGoals from './onboarding-step-learning.svelte';
 	import OnboardingStepLife from './onboarding-step-life.svelte';
 	import OnboardingStepNav from './onboarding-step-nav.svelte';
 	import { onboardingSchema, step1Schema, step2Schema, type OnboardingFormData } from './schema.js';
@@ -25,18 +26,23 @@
 
 	let step = $state(1);
 
+	function applyFieldErrors(
+		currentErrors: Parameters<typeof errors.update>[0] extends (arg: infer T) => unknown ? T : never,
+		fieldErrors: Record<string, string[] | undefined>
+	) {
+		const mutableErrors = currentErrors as Record<string, string[] | undefined>;
+		for (const [k, v] of Object.entries(fieldErrors)) {
+			mutableErrors[k] = v;
+		}
+		return currentErrors;
+	}
+
 	function validateStep1() {
 		const d = get(formData);
 		const r = step1Schema.safeParse(d);
 		if (!r.success) {
 			const fe = r.error.flatten().fieldErrors;
-			errors.update((e) => {
-				for (const [k, v] of Object.entries(fe)) {
-					// @ts-ignore
-					e[k] = v;
-				}
-				return e;
-			});
+			errors.update((e) => applyFieldErrors(e, fe));
 			return false;
 		}
 		return true;
@@ -47,13 +53,7 @@
 		const r = step2Schema.safeParse(d);
 		if (!r.success) {
 			const fe = r.error.flatten().fieldErrors;
-			errors.update((e) => {
-				for (const [k, v] of Object.entries(fe)) {
-					// @ts-ignore
-					e[k] = v;
-				}
-				return e;
-			});
+			errors.update((e) => applyFieldErrors(e, fe));
 			return false;
 		}
 		return true;
@@ -75,7 +75,7 @@
 	function back() {
 		errors.clear();
 		if (step === 1) {
-			goto('/');
+			goto(resolve('/'));
 			return;
 		}
 		step -= 1;
@@ -84,7 +84,7 @@
 
 <form method="POST" class="contents" use:enhance>
 	<main
-		class="dotmatrix-bg relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
+		class=" relative flex min-h-screen flex-col text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 	>
 		<Navbar />
 

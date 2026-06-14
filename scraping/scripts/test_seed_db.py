@@ -183,6 +183,35 @@ class RequirementNormalizationTests(unittest.TestCase):
         self.assertEqual(SEED.normalize_term("Unknown"), "Unknown")
         self.assertEqual(SEED.normalize_term(""), "Unknown")
 
+    def test_builds_course_title_code_map_from_catalog_shapes(self):
+        courses = [
+            {"course_name": "COMPSCI 1DM3 - Discrete Mathematics for Computer Science"},
+            {"code": "MATH 1B03", "name": "Linear Algebra I"},
+        ]
+
+        self.assertEqual(
+            SEED.build_course_title_code_map(courses),
+            {
+                "Discrete Mathematics for Computer Science": "COMPSCI 1DM3",
+                "Linear Algebra I": "MATH 1B03",
+            },
+        )
+
+    def test_resolves_schedule_course_id_by_title_when_code_is_title(self):
+        course_map = {"COMPSCI 1DM3": 42}
+        title_code_map = {
+            "Discrete Mathematics for Computer Science": "COMPSCI 1DM3",
+        }
+        course = {
+            "course_code": "Discrete Mathematics for Computer Science",
+            "course_title": "Discrete Mathematics for Computer Science",
+        }
+
+        self.assertEqual(
+            SEED.resolve_schedule_course_id(course, course_map, title_code_map),
+            42,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

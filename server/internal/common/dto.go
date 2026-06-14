@@ -26,3 +26,8 @@ type OnboardingInfo struct {
 type ProgramRequirementsInfo struct {
 	Name string `json:"name"`
 }
+
+type PlanInfo struct {
+  Title string `json:"title"`
+  Term string `json:"term"`
+}

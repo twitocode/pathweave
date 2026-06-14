@@ -37,6 +37,8 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Use(mw.RequireAuth(cfg, s.Auth))
 
 		r.Get("/", handlers.HandleGetProgramRequirements(s.Program))
+		r.Get("/requirements/codes", handlers.HandleGetUserProgramRequirementCodes(s.Program))
+		r.Get("/requirements/codes/{term}", handlers.HandleGetUserProgramRequirementCodesAvailableInTerm(s.Program))
 	})
 
 	r.Route("/user", func(r chi.Router) {
@@ -56,6 +58,9 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 
 	r.Route("/plan", func(r chi.Router) {
 		r.Use(mw.RequireAuth(cfg, s.Auth))
+
+		r.Post("/", handlers.HandleCreatePlan(s.Planner))
+		r.Get("/", handlers.HandleGetAllPlans(s.Planner))
 	})
 
 	r.With(mw.RequireCSRF(cfg.SecretKey)).Post("/logout", handlers.HandleLogout(cfg, s.Auth))

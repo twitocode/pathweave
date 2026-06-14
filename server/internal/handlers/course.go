@@ -13,8 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var validTerms []string = []string{"Fall 2026", "Winter 2027", "Spring/Summer 2027"}
-
 func HandleGetCourseByCode(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := chi.URLParam(r, "code")
@@ -66,7 +64,12 @@ func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 		var body struct {
 			Term string `json:"term"`
 		}
-		common.DecodeJSON(r, &body)
+
+		err := common.DecodeJSON(r, &body)
+		if err != nil {
+			common.WriteError(w, http.StatusBadRequest, "invalid json in request")
+			return
+		}
 
 		course_id, err := strconv.Atoi(id)
 		if err != nil {
@@ -79,14 +82,15 @@ func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 			return
 		}
 
-		if !slices.Contains(validTerms, body.Term) {
+		if !slices.Contains(common.ValidTerms, body.Term) {
 			common.WriteError(w, http.StatusBadRequest, "invalid term provided")
 			return
 		}
 
 		log := middleware.Logger(r)
+		termString := common.TermNumberToString[body.Term]
 
-		res, err := cs.GetCourseSectionsByTerm(r.Context(), course_id, body.Term)
+		res, err := cs.GetCourseSectionsByTerm(r.Context(), course_id, termString)
 		if err != nil {
 			log.Error("error getting course schedules", zap.Error(err))
 		}

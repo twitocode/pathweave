@@ -26,6 +26,13 @@ func TimeToString(pt pgtype.Time) string {
 	return t.Format("15:04")
 }
 
+func TimestamptzToString(pt pgtype.Timestamptz) string {
+	if !pt.Valid {
+		return ""
+	}
+	return pt.Time.UTC().Format(time.RFC3339)
+}
+
 func NumericToFloat64(pn pgtype.Numeric) float64 {
 	f8, err := pn.Float64Value()
 	if err != nil {

@@ -12,6 +12,24 @@ JOIN program p
 WHERE ud.user_id = @id
 LIMIT 1;
 
+-- name: GetUserProgramRequirementCodes :many
+SELECT DISTINCT ucode::text
+FROM user_details AS ud
+JOIN program p
+  ON p.id = ud.program_id
+CROSS JOIN unnest(p.requirement_codes) AS ucode
+WHERE ud.user_id = @id;
+
+-- name: GetUserProgramRequirementCodesAvailableInTerm :many
+SELECT DISTINCT ucode::text
+FROM user_details AS ud
+JOIN program p
+  ON p.id = ud.program_id
+CROSS JOIN unnest(p.requirement_codes) AS ucode
+JOIN course c ON c.code = ucode::text
+JOIN section s ON s.course_id = c.id
+WHERE ud.user_id = @id AND s.term = @term;
+
 -- name: GetUserProgramID :one
 SELECT ud.program_id as codes
 FROM user_details AS ud

@@ -2,6 +2,13 @@
   "python.defaultInterpreterPath": "${workspaceFolder}/scraping-service/.venv/bin/python3",
   "python.analysis.extraPaths": ["${workspaceFolder}/server/src"],
   "python.terminal.activateEnvironment": true,
-  "cSpell.words": ["pgvector", "sqlc", "sqlcgen", "uuidv", "workos"],
+  "cSpell.words": [
+    "pgvector",
+    "sqlc",
+    "sqlcgen",
+    "Timestamptz",
+    "uuidv",
+    "workos"
+  ],
   "python-envs.pythonProjects": []
 }

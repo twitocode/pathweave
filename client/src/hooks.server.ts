@@ -38,6 +38,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isAuthRoute = routeId.startsWith('/auth');
 	const isOnboardingRoute = routeId === '/onboarding';
 	const isLoginRoute = routeId === '/login';
+	const isLogoutRoute = routeId === '/logout';
 
 	// 1. Check for forced onboarding from query param (e.g. from callback)
 	const hasOnboardedParam = event.url.searchParams.get('onboarded');
@@ -69,7 +70,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					throw redirect(303, user.onboarded ? '/plans' : '/onboarding');
 				}
 
-				if (!user.onboarded && !isOnboardingRoute && !isAuthRoute) {
+				if (!user.onboarded && !isOnboardingRoute && !isAuthRoute && !isLogoutRoute) {
 					throw redirect(303, '/onboarding');
 				}
 
