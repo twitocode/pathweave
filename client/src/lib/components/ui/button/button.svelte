@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import { resolve } from '$app/paths';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 	import { tv, type VariantProps } from 'tailwind-variants';
@@ -59,18 +60,33 @@
 </script>
 
 {#if href}
-	<a
-		bind:this={ref}
-		data-slot="button"
-		class={cn(buttonVariants({ variant, size }), className)}
-		href={disabled ? undefined : href}
-		aria-disabled={disabled}
-		role={disabled ? 'link' : undefined}
-		tabindex={disabled ? -1 : undefined}
-		{...restProps}
-	>
-		{@render children?.()}
-	</a>
+	{#if href.startsWith('/')}
+		<a
+			bind:this={ref}
+			data-slot="button"
+			class={cn(buttonVariants({ variant, size }), className)}
+			href={disabled ? undefined : resolve(href)}
+			aria-disabled={disabled}
+			role={disabled ? 'link' : undefined}
+			tabindex={disabled ? -1 : undefined}
+			{...restProps}
+		>
+			{@render children?.()}
+		</a>
+	{:else}
+		<a
+			bind:this={ref}
+			data-slot="button"
+			class={cn(buttonVariants({ variant, size }), className)}
+			href={disabled ? undefined : href}
+			aria-disabled={disabled}
+			role={disabled ? 'link' : undefined}
+			tabindex={disabled ? -1 : undefined}
+			{...restProps}
+		>
+			{@render children?.()}
+		</a>
+	{/if}
 {:else}
 	<button
 		bind:this={ref}

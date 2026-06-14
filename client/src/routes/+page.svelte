@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import Navbar from '$lib/components/navbar.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { ArrowRight } from 'phosphor-svelte';
@@ -111,17 +112,17 @@
 					class="flex gap-6 text-[10px] font-bold tracking-[0.2em] text-zinc-900 uppercase dark:text-zinc-300"
 				>
 					{#if data.user?.onboarded}
-						<a href="/plans" class="link"
+						<a href={resolve('/plans')} class="link"
 							>Go to Plans</a
 						>
 					{:else if data.user}
 						<a
-							href="/onboarding"
+							href={resolve('/onboarding')}
 							class="link"
 							>Continue Onboarding</a
 						>
 					{:else}
-						<a href="/login" class="link"
+						<a href={resolve('/login')} class="link"
 							>Login</a
 						>
 					{/if}

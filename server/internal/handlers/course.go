@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-
 func HandleGetCourseByCode(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := chi.URLParam(r, "code")
@@ -65,7 +64,12 @@ func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 		var body struct {
 			Term string `json:"term"`
 		}
-		common.DecodeJSON(r, &body)
+
+		err := common.DecodeJSON(r, &body)
+		if err != nil {
+			common.WriteError(w, http.StatusBadRequest, "invalid json in request")
+			return
+		}
 
 		course_id, err := strconv.Atoi(id)
 		if err != nil {

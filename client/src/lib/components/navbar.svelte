@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { scrollState } from '$lib/hooks/scroll.svelte';
@@ -25,7 +26,7 @@
 >
 	<div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-12">
 		<a
-			href="/"
+			href={resolve('/')}
 			class="text-sm font-bold tracking-[0.3em] uppercase transition-colors hover:text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-400"
 		>
 			PathWeave
@@ -34,10 +35,10 @@
 			{#if page.url.pathname !== '/login' && !path.includes('plans')}
 				{#if loggedIn}
 					{#if onboarded}
-						<a href="/plans" class="link"> Your Plans </a>
+						<a href={resolve('/plans')} class="link"> Your Plans </a>
 					{/if}
 				{:else}
-					<a href="/login" class="link"> Login </a>
+					<a href={resolve('/login')} class="link"> Login </a>
 				{/if}
 			{/if}
 			{#if loggedIn}

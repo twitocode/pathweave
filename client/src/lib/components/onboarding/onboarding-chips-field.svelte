@@ -50,10 +50,6 @@
 		await tick();
 		inputEl?.focus();
 	}
-
-	function labelForValue(value: string) {
-		return suggestions.find((s) => s.value === value)?.label ?? value;
-	}
 </script>
 
 <div class="space-y-2">

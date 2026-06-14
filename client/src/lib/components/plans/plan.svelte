@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import type { Plan } from '$lib/types';
@@ -28,7 +29,7 @@
 		aria-hidden="true"
 	></div>
 
-	<a href="/plans/{plan.id}" class="absolute inset-0 z-0" aria-label="Open {plan.title}"></a>
+	<a href={resolve(`/plans/${plan.id}`)} class="absolute inset-0 z-0" aria-label="Open {plan.title}"></a>
 
 	<div class="flex flex-5 flex-col space-y-4">
 		<span
