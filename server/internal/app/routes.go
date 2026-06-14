@@ -63,5 +63,14 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 		r.Get("/", handlers.HandleGetAllPlans(s.Planner))
 	})
 
+	r.Route("/internal", func(r chi.Router) {
+		r.Use(mw.RequireInternalToken(cfg.InternalServiceToken))
+
+		r.Post("/scrape-runs", handlers.HandleCreateScrapeRun(s.ScrapeIngest))
+		r.Get("/scrape-runs/{run_id}", handlers.HandleGetScrapeRun(s.ScrapeIngest))
+		r.Post("/scrape-runs/{run_id}/artifacts", handlers.HandleStageScrapeArtifacts(s.ScrapeIngest))
+		r.Post("/scrape-runs/{run_id}/promote", handlers.HandlePromoteScrapeRun(s.ScrapeIngest))
+	})
+
 	r.With(mw.RequireCSRF(cfg.SecretKey)).Post("/logout", handlers.HandleLogout(cfg, s.Auth))
 }

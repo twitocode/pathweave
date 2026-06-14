@@ -40,14 +40,16 @@ export const load: PageServerLoad = async ({ locals, request, fetch }) => {
 			});
 
 			if (res2.ok) {
-				const plans: Plan[] = (Array.isArray(body) ? body : []).filter(Boolean).map((x: PlanResult) => ({
-					title: x.title,
-					term: x.term,
-					id: x.id,
-					userID: x.user_id,
-					createdAt: x.created_at,
-					courseCount: x.course_count
-				}));
+				const plans: Plan[] = (Array.isArray(body) ? body : [])
+					.filter(Boolean)
+					.map((x: PlanResult) => ({
+						title: x.title,
+						term: x.term,
+						id: x.id,
+						userID: x.user_id,
+						createdAt: x.created_at,
+						courseCount: x.course_count
+					}));
 				const programName = await res2.json();
 
 				return {

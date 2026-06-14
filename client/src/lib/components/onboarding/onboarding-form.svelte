@@ -27,7 +27,9 @@
 	let step = $state(1);
 
 	function applyFieldErrors(
-		currentErrors: Parameters<typeof errors.update>[0] extends (arg: infer T) => unknown ? T : never,
+		currentErrors: Parameters<typeof errors.update>[0] extends (arg: infer T) => unknown
+			? T
+			: never,
 		fieldErrors: Record<string, string[] | undefined>
 	) {
 		const mutableErrors = currentErrors as Record<string, string[] | undefined>;

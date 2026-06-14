@@ -133,6 +133,10 @@ def normalize_term(term_str):
 
 
 def seed():
+    print(
+        "WARNING: seed_db.py is the legacy direct-DB seeder. "
+        "Prefer scripts/publish_scrape_run.py so the Go API owns validation and promotion."
+    )
     conn = get_db_connection()
     cur = conn.cursor()
 

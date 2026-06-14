@@ -16,6 +16,8 @@
 	class="w-full border-t border-zinc-200 bg-[#f5f5f0]/80 py-6 backdrop-blur-sm dark:border-zinc-900 dark:bg-zinc-950/80"
 >
 	<div class="mx-auto max-w-7xl px-6 md:px-12">
-		<div class="text-[12px] tracking-[0.2em] text-zinc-600 dark:text-zinc-400">© 2026 PathWeave</div>
+		<div class="text-[12px] tracking-[0.2em] text-zinc-600 dark:text-zinc-400">
+			© 2026 PathWeave
+		</div>
 	</div>
 </footer>

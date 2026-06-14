@@ -88,6 +88,24 @@ type ProgramRequirementLevel struct {
 	SortOrder   int32
 }
 
+type ScrapeRun struct {
+	ID                uuid.UUID
+	Source            string
+	Status            string
+	Metadata          []byte
+	ErrorMessage      pgtype.Text
+	CourseCount       int32
+	ProgramCount      int32
+	TeacherCount      int32
+	ScheduleTermCount int32
+	StartedAt         pgtype.Timestamptz
+	StagedAt          pgtype.Timestamptz
+	PromotedAt        pgtype.Timestamptz
+	FailedAt          pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
 type Section struct {
 	ID         int32
 	CourseID   int64
@@ -116,6 +134,35 @@ type SectionReference struct {
 type SectionTeacher struct {
 	SectionID int32
 	TeacherID int32
+}
+
+type StagingCourse struct {
+	RunID      uuid.UUID
+	CourseCode string
+	Payload    []byte
+	CreatedAt  pgtype.Timestamptz
+}
+
+type StagingProgram struct {
+	RunID       uuid.UUID
+	ProgramName string
+	Payload     []byte
+	CreatedAt   pgtype.Timestamptz
+}
+
+type StagingSchedule struct {
+	RunID      uuid.UUID
+	Term       string
+	CourseCode string
+	Payload    []byte
+	CreatedAt  pgtype.Timestamptz
+}
+
+type StagingTeacher struct {
+	RunID     uuid.UUID
+	RmpID     string
+	Payload   []byte
+	CreatedAt pgtype.Timestamptz
 }
 
 type Teacher struct {

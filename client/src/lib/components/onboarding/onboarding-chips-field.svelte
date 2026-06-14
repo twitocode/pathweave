@@ -62,7 +62,11 @@
 			onclick={() => inputEl?.focus()}
 		>
 			{#each values as item, i (item + i)}
-				<button type="button" class={cn(chipClass, 'shrink-0 rounded-2xl')} onclick={() => onRemove(i)}>
+				<button
+					type="button"
+					class={cn(chipClass, 'shrink-0 rounded-2xl')}
+					onclick={() => onRemove(i)}
+				>
 					{item}
 					<span class="opacity-60">×</span>
 				</button>
