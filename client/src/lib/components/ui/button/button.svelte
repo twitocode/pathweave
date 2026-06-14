@@ -60,33 +60,18 @@
 </script>
 
 {#if href}
-	{#if href.startsWith('/')}
-		<a
-			bind:this={ref}
-			data-slot="button"
-			class={cn(buttonVariants({ variant, size }), className)}
-			href={disabled ? undefined : resolve(href)}
-			aria-disabled={disabled}
-			role={disabled ? 'link' : undefined}
-			tabindex={disabled ? -1 : undefined}
-			{...restProps}
-		>
-			{@render children?.()}
-		</a>
-	{:else}
-		<a
-			bind:this={ref}
-			data-slot="button"
-			class={cn(buttonVariants({ variant, size }), className)}
-			href={disabled ? undefined : href}
-			aria-disabled={disabled}
-			role={disabled ? 'link' : undefined}
-			tabindex={disabled ? -1 : undefined}
-			{...restProps}
-		>
-			{@render children?.()}
-		</a>
-	{/if}
+	<a
+		bind:this={ref}
+		data-slot="button"
+		class={cn(buttonVariants({ variant, size }), className)}
+		href={disabled ? undefined : resolve(href)}
+		aria-disabled={disabled}
+		role={disabled ? 'link' : undefined}
+		tabindex={disabled ? -1 : undefined}
+		{...restProps}
+	>
+		{@render children?.()}
+	</a>
 {:else}
 	<button
 		bind:this={ref}
