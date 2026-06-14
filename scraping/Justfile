@@ -3,3 +3,12 @@ dev:
 
 sync:
 	uv sync
+
+publish:
+	.venv/bin/python scripts/publish_scrape_run.py
+
+publish-stage-only:
+	.venv/bin/python scripts/publish_scrape_run.py --no-promote
+
+test:
+	.venv/bin/python -m unittest discover scripts

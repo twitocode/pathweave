@@ -7,18 +7,14 @@ import unittest
 
 sys.modules.setdefault("dotenv", types.SimpleNamespace(load_dotenv=lambda *_args, **_kwargs: None))
 sys.modules.setdefault("psycopg2", types.SimpleNamespace(connect=lambda *_args, **_kwargs: None))
-sys.modules.setdefault(
-    "playwright",
-    types.SimpleNamespace(async_api=types.SimpleNamespace(async_playwright=None)),
+sys.modules["playwright"] = types.SimpleNamespace(
+    async_api=types.SimpleNamespace(async_playwright=None)
 )
-sys.modules.setdefault(
-    "playwright.async_api",
-    types.SimpleNamespace(
-        async_playwright=None,
-        Page=object,
-        Frame=object,
-        Browser=object,
-    ),
+sys.modules["playwright.async_api"] = types.SimpleNamespace(
+    async_playwright=None,
+    Page=object,
+    Frame=object,
+    Browser=object,
 )
 
 

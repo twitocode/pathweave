@@ -1,5 +1,5 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/scraping-service/.venv/bin/python3",
+  "python.defaultInterpreterPath": "${workspaceFolder}/scraping/.venv/bin/python3",
   "python.analysis.extraPaths": ["${workspaceFolder}/server/src"],
   "python.terminal.activateEnvironment": true,
   "cSpell.words": [
