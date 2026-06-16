@@ -3,7 +3,7 @@ import json
 import os
 import re
 from typing import Any, Dict, List, Optional
-from glob import glob
+from utils import cleanup_worker_files
 from bs4 import BeautifulSoup
 from playwright.async_api import Browser, Page, async_playwright
 
@@ -18,13 +18,6 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
 
-def cleanup_worker_files(prefix: str) -> None:
-    pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
-    for path in glob(pattern):
-        try:
-            os.remove(path)
-        except Exception as e:
-            print(f"Warning: failed to remove worker file {path}: {e}")
 
 async def fetch_and_parse_course(
     context, base_url: str, item: Dict[str, str], semaphore: asyncio.Semaphore
@@ -299,6 +292,40 @@ async def scrape_course_page(
             await context.close()
 
 
+# ---------------------------------------------------------------------------
+# Cleaning
+# ---------------------------------------------------------------------------
+
+def process_courses(courses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Split course_name into separate code and name fields."""
+    processed_courses = []
+    for course in courses:
+        full_name = course.get('course_name', '')
+        if ' - ' in full_name:
+            code, name = full_name.split(' - ', 1)
+        else:
+            code = ""
+            name = full_name
+        
+        # Create a new dict with fields in preferred order
+        new_course = {
+            'code': code.strip(),
+            'name': name.strip()
+        }
+        # Copy over other fields
+        for key, value in course.items():
+            if key != 'course_name':
+                new_course[key] = value
+        
+        processed_courses.append(new_course)
+
+    return processed_courses
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 async def scrape_courses():
     os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -358,16 +385,25 @@ async def scrape_courses():
         deduped_by_name[key] = item
 
     final_results = list(deduped_by_name.values())
+
+    # Save raw scraped data
     output_file = os.path.join(DATA_DIR, "all_courses.json")
     with open(output_file, "w") as f:
         json.dump(final_results, f, indent=2)
     cleanup_worker_files("all_courses")
 
+    # Clean and save processed data
+    processed = process_courses(final_results)
+    processed_file = os.path.join(DATA_DIR, "all_courses_processed.json")
+    with open(processed_file, "w", encoding="utf-8") as f:
+        json.dump(processed, f, indent=2, ensure_ascii=False)
+
     print(
         f"\nSuccess! Scraped {len(final_results)} unique courses "
         f"(filtered {duplicate_count} duplicates)."
     )
-    print(f"Data saved to {output_file}")
+    print(f"Raw data saved to {output_file}")
+    print(f"Processed data saved to {processed_file}")
     return final_results
 
 if __name__ == "__main__":

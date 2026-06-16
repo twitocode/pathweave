@@ -50,7 +50,11 @@ sys.modules.setdefault(
 sys.modules.setdefault("rich.panel", types.SimpleNamespace(Panel=object))
 
 
-SCRIPT_PATH = pathlib.Path(__file__).resolve().parent / "scrape_mosaic_schedules.py"
+
+SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+
+SCRIPT_PATH = SCRIPTS_DIR / "scrape_mosaic_schedules.py"
 SPEC = importlib.util.spec_from_file_location("scrape_mosaic_schedules", SCRIPT_PATH)
 assert SPEC is not None
 assert SPEC.loader is not None

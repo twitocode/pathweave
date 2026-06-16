@@ -7,8 +7,14 @@ import itertools
 import json
 import time
 import random
-from glob import glob
 from typing import Optional, List, Dict, Any, Set
+from utils import (
+    cleanup_worker_files,
+    split_catalog_course_name,
+    build_course_title_code_map,
+    resolve_scraped_course_code,
+    COURSE_CODE_RE,
+)
 from dotenv import load_dotenv
 import psycopg2
 from playwright.async_api import async_playwright, Page, Frame, Browser
@@ -102,7 +108,6 @@ HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 TARGET_TERMS = ["2269", "2271"]
-COURSE_CODE_RE = re.compile(r"\b[A-Z]{2,10}\s\d[A-Z0-9]{2,4}(?:\s+A/B)?\b")
 
 TERM_LABELS = {
     "2259": "Fall 2025",
@@ -205,36 +210,7 @@ def merge_term_results(all_terms_data: List[Dict[str, Any]], term_label: str, te
     return merged_terms
 
 
-def split_catalog_course_name(course_name: str) -> tuple[str, str]:
-    if not course_name or " - " not in course_name:
-        return "", (course_name or "").strip()
-    code, title = course_name.split(" - ", 1)
-    return code.strip(), title.strip()
 
-
-def build_course_title_code_map(courses: List[Dict[str, Any]]) -> Dict[str, str]:
-    title_to_code: Dict[str, str] = {}
-    ambiguous_titles: Set[str] = set()
-
-    for course in courses:
-        code = course.get("code")
-        title = course.get("name")
-        if not code or not title:
-            code, title = split_catalog_course_name(course.get("course_name", ""))
-
-        if not code or not title:
-            continue
-
-        if title in title_to_code and title_to_code[title] != code:
-            ambiguous_titles.add(title)
-            continue
-
-        title_to_code[title] = code
-
-    for title in ambiguous_titles:
-        title_to_code.pop(title, None)
-
-    return title_to_code
 
 
 def load_course_title_code_map() -> Dict[str, str]:
@@ -250,14 +226,6 @@ def load_course_title_code_map() -> Dict[str, str]:
     return build_course_title_code_map(courses)
 
 
-def resolve_scraped_course_code(scraped_code: str, course_title: str, title_code_map: Dict[str, str]) -> str:
-    scraped_code = (scraped_code or "").strip()
-    course_title = (course_title or "").strip()
-
-    if COURSE_CODE_RE.fullmatch(scraped_code):
-        return scraped_code
-
-    return title_code_map.get(course_title, scraped_code or course_title)
 
 
 def parse_selected_letters(value: Optional[str]) -> List[str]:
@@ -363,13 +331,6 @@ def format_assignment_label(assignment: Dict[str, int | str]) -> str:
     return f"{letter} {start + 1}-{end}"
 
 
-def cleanup_worker_files(prefix: str) -> None:
-    pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
-    for path in glob(pattern):
-        try:
-            os.remove(path)
-        except Exception as e:
-            console.print(f"Warning: failed to remove worker file {path}: {e}")
 
 async def get_peoplesoft_frame(page: Page) -> Frame | Page:
     iframe = page.frame(name="TargetContent")

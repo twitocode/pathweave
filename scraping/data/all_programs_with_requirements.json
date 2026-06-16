@@ -61949,6 +61949,7 @@
       "RUSSIAN 2H03",
       "IARTS 2RR3",
       "IARTS 2RP3",
+      "IARTS 2MB3",
       "IARTS 3RC3",
       "IARTS 3RD3",
       "IARTS 3MC3",
@@ -67776,7 +67777,7 @@
     "requirements": [
       "COMMERCE 2FA3",
       "MATH 2FM3",
-      "STATS 2DA3",
+      "STATS 2D03",
       "STATS 2MB3",
       "MATH 2LA3",
       "MATH 2R03",
@@ -67802,8 +67803,7 @@
       "STATS 4G03",
       "STATS 4H03",
       "STATS 4A03",
-      "MATH 2C03",
-      "STATS 2D03"
+      "MATH 2C03"
     ],
     "requirements_by_level": [
       {
@@ -67865,8 +67865,8 @@
               },
               {
                 "type": "course",
-                "text": "STATS 2DA3 - An Introduction to Data Science Methods",
-                "course_code": "STATS 2DA3"
+                "text": "STATS 2D03 - Introduction to Probability",
+                "course_code": "STATS 2D03"
               },
               {
                 "type": "course",
@@ -83731,7 +83731,7 @@
               },
               {
                 "type": "course",
-                "text": "MATH 4X03 - Complex Analysis II",
+                "text": "MATH 4X03* - Complex Analysis II",
                 "course_code": "MATH 4X03"
               }
             ]
@@ -83945,7 +83945,7 @@
               },
               {
                 "type": "course",
-                "text": "MATH 4X03 - Complex Analysis II",
+                "text": "MATH 4X03* - Complex Analysis II",
                 "course_code": "MATH 4X03"
               }
             ]
