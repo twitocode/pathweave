@@ -7,8 +7,14 @@ import itertools
 import json
 import time
 import random
-from glob import glob
 from typing import Optional, List, Dict, Any, Set
+from utils import (
+    cleanup_worker_files,
+    split_catalog_course_name,
+    build_course_title_code_map,
+    resolve_scraped_course_code,
+    COURSE_CODE_RE,
+)
 from dotenv import load_dotenv
 import psycopg2
 from playwright.async_api import async_playwright, Page, Frame, Browser
@@ -101,8 +107,7 @@ MOSAIC_PASSWORD = os.getenv("MOSAIC_PASSWORD")
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-TARGET_TERMS = ["2269", "2271", "2275"]
-COURSE_CODE_RE = re.compile(r"\b[A-Z]{2,10}\s\d[A-Z0-9]{2,4}(?:\s+A/B)?\b")
+TARGET_TERMS = ["2269", "2271"]
 
 TERM_LABELS = {
     "2259": "Fall 2025",
@@ -205,36 +210,7 @@ def merge_term_results(all_terms_data: List[Dict[str, Any]], term_label: str, te
     return merged_terms
 
 
-def split_catalog_course_name(course_name: str) -> tuple[str, str]:
-    if not course_name or " - " not in course_name:
-        return "", (course_name or "").strip()
-    code, title = course_name.split(" - ", 1)
-    return code.strip(), title.strip()
 
-
-def build_course_title_code_map(courses: List[Dict[str, Any]]) -> Dict[str, str]:
-    title_to_code: Dict[str, str] = {}
-    ambiguous_titles: Set[str] = set()
-
-    for course in courses:
-        code = course.get("code")
-        title = course.get("name")
-        if not code or not title:
-            code, title = split_catalog_course_name(course.get("course_name", ""))
-
-        if not code or not title:
-            continue
-
-        if title in title_to_code and title_to_code[title] != code:
-            ambiguous_titles.add(title)
-            continue
-
-        title_to_code[title] = code
-
-    for title in ambiguous_titles:
-        title_to_code.pop(title, None)
-
-    return title_to_code
 
 
 def load_course_title_code_map() -> Dict[str, str]:
@@ -250,14 +226,6 @@ def load_course_title_code_map() -> Dict[str, str]:
     return build_course_title_code_map(courses)
 
 
-def resolve_scraped_course_code(scraped_code: str, course_title: str, title_code_map: Dict[str, str]) -> str:
-    scraped_code = (scraped_code or "").strip()
-    course_title = (course_title or "").strip()
-
-    if COURSE_CODE_RE.fullmatch(scraped_code):
-        return scraped_code
-
-    return title_code_map.get(course_title, scraped_code or course_title)
 
 
 def parse_selected_letters(value: Optional[str]) -> List[str]:
@@ -363,13 +331,6 @@ def format_assignment_label(assignment: Dict[str, int | str]) -> str:
     return f"{letter} {start + 1}-{end}"
 
 
-def cleanup_worker_files(prefix: str) -> None:
-    pattern = os.path.join(DATA_DIR, f"{prefix}.worker_*.json")
-    for path in glob(pattern):
-        try:
-            os.remove(path)
-        except Exception as e:
-            console.print(f"Warning: failed to remove worker file {path}: {e}")
 
 async def get_peoplesoft_frame(page: Page) -> Frame | Page:
     iframe = page.frame(name="TargetContent")
@@ -389,21 +350,39 @@ def _fmt_time(seconds: float) -> str:
 
 async def navigate_to_term_catalog(page: Page, worker_id: int, term_code: str) -> Frame | Page:
     update_worker(worker_id, status="Logging In", current=f"Navigating to Mosaic login...")
-    await page.goto("https://mosaic.mcmaster.ca/psp/prcsprd/?cmd=login")
-
-    update_worker(worker_id, status="Logging In", current=f"Logging in...")
-    await page.fill("#userid", MOSAIC_USERNAME or "")
-    await page.fill("#pwd", MOSAIC_PASSWORD or "")
-    # Increase timeout dramatically for the login step
-    await page.click("input[name='Submit']", timeout=90000)
-
     try:
-        await page.wait_for_load_state("networkidle", timeout=60000)
+        await page.goto("https://mosaic.mcmaster.ca/psp/prcsprd/?cmd=login", wait_until="domcontentloaded", timeout=20000)
     except Exception:
-        pass # sometimes networkidle never fires on Peoplesoft, we rely on the next visible locator anyway
+        pass # The page might infinitely load, but the form could still be usable
+    
+    for attempt in range(3):
+        await page.locator("#userid").wait_for(state="visible", timeout=30000)
+
+        update_worker(worker_id, status="Logging In", current=f"Logging in (Attempt {attempt + 1})...")
+        await page.fill("#userid", MOSAIC_USERNAME or "")
+        await page.fill("#pwd", MOSAIC_PASSWORD or "")
+        # Increase timeout dramatically for the login step
+        await page.click("input[name='Submit']", timeout=90000)
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass # sometimes networkidle never fires on Peoplesoft, we rely on the next visible locator anyway
+
+        # Check if we hit the "Session Expired" page right after login
+        expired_link = page.locator("a:has-text('Sign in to PeopleSoft')")
+        if await expired_link.count() > 0 and await expired_link.first.is_visible():
+            update_worker(worker_id, status="Logging In", current=f"Session expired detected, retrying...")
+            await expired_link.first.click()
+            await asyncio.sleep(2)
+            continue
+
+        break
 
     update_worker(worker_id, status="Navigating", current=f"Waiting for Student Center...")
-    student_center_div = page.locator("#win0divPTNUI_LAND_REC_GROUPLET\\$7")
+    student_center_div = page.locator("div[id^='win0divPTNUI_LAND_REC_GROUPLET']").filter(has_text=re.compile("Student Center", re.IGNORECASE)).first
+    if await student_center_div.count() == 0:
+        student_center_div = page.locator("text='Student Center'").first
     await student_center_div.wait_for(state="visible", timeout=90000)
     await student_center_div.click()
     await page.wait_for_load_state("networkidle")
@@ -684,13 +663,12 @@ async def scrape_letters(browser: Browser, worker_id: int, assignments: List[Dic
                 await asyncio.sleep(2.3)
 
                 modal_frame = None
-                view_sections_btn = None
                 is_not_scheduled = False
 
+                # Step 1: Find the modal frame — look for "View Class Sections" button or "not scheduled" text
                 for f in page.frames:
-                    btn = f.locator("#DERIVED_SAA_CRS_SSR_PB_GO")
+                    btn = f.locator("input[id^='DERIVED_SAA_CRS_SSR_PB_GO']")
                     if await btn.count() > 0 and await btn.first.is_visible():
-                        view_sections_btn = btn.first
                         modal_frame = f
                         break
 
@@ -703,17 +681,72 @@ async def scrape_letters(browser: Browser, worker_id: int, assignments: List[Dic
                 schedules = []
 
                 if not modal_frame:
-                    update_worker(worker_id, status="Running", current=f"Could not locate modal buttons.")
+                    update_worker(worker_id, status="Running", current=f"Could not locate modal frame.")
                 elif is_not_scheduled:
                     update_worker(worker_id, status="Running", current=f"Course not scheduled.")
                 else:
+                    # Step 2: Click "View Class Sections" button to reveal the term dropdown
+                    view_btn = modal_frame.locator("input[id^='DERIVED_SAA_CRS_SSR_PB_GO']")
                     try:
-                        await view_sections_btn.click()
+                        await view_btn.first.click()
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=8000)
+                        except Exception:
+                            pass
+                        await asyncio.sleep(0.5)
                     except Exception as e:
-                        log_error(worker_id, f"Error clicking view sections for course {course_code}: {e}")
-                        update_worker(worker_id, status="Error", current=f"Error clicking view sections: {e}", errors=1)
-                    
-                    await asyncio.sleep(3.6)
+                        log_error(worker_id, f"Error clicking View Class Sections for {course_code}: {e}")
+                        update_worker(worker_id, status="Error", current=f"Error clicking View Class Sections: {e}", errors=1)
+
+                    # Re-find the modal frame after postback
+                    modal_frame = None
+                    for f in page.frames:
+                        term_dropdown = f.locator("#DERIVED_SAA_CRS_TERM_ALT")
+                        if await term_dropdown.count() > 0 and await term_dropdown.first.is_visible():
+                            modal_frame = f
+                            break
+                        # Also check if sections already loaded (single-term courses skip the dropdown)
+                        if await f.locator("tr[id^='trCLASS\\$']").count() > 0:
+                            modal_frame = f
+                            break
+                        not_scheduled = f.locator("text=This course has not been scheduled.")
+                        if await not_scheduled.count() > 0 and await not_scheduled.first.is_visible():
+                            is_not_scheduled = True
+                            modal_frame = f
+                            break
+
+                    if not modal_frame:
+                        update_worker(worker_id, status="Running", current=f"No dropdown or sections after clicking View Class Sections.")
+                    elif is_not_scheduled:
+                        update_worker(worker_id, status="Running", current=f"Course not scheduled for any term.")
+                    else:
+                        # Step 3: Check for the term dropdown and select the correct term
+                        term_dropdown = modal_frame.locator("#DERIVED_SAA_CRS_TERM_ALT")
+                        if await term_dropdown.count() > 0 and await term_dropdown.first.is_visible():
+                            options = await term_dropdown.first.locator(f"option[value='{term_code}']").count()
+                            if options == 0:
+                                # Term not in dropdown — skip
+                                update_worker(worker_id, status="Running", current=f"Term not available for {course_code}.")
+                                is_not_scheduled = True
+                            else:
+                                selected_value = await term_dropdown.first.input_value()
+                                if selected_value != term_code:
+                                    await term_dropdown.first.select_option(value=term_code)
+                                    await asyncio.sleep(0.3)
+
+                                # Step 4: Click "Show Sections" to load sections for selected term
+                                show_btn = modal_frame.locator("input[id^='DERIVED_SAA_CRS_SSR_PB_GO']")
+                                if await show_btn.count() > 0 and await show_btn.first.is_visible():
+                                    try:
+                                        await show_btn.first.click()
+                                        try:
+                                            await page.wait_for_load_state("networkidle", timeout=8000)
+                                        except Exception:
+                                            pass
+                                        await asyncio.sleep(0.5)
+                                    except Exception as e:
+                                        log_error(worker_id, f"Error clicking Show Sections for {course_code}: {e}")
+                                        update_worker(worker_id, status="Error", current=f"Error clicking Show Sections: {e}", errors=1)
                     
                     parsed_frame = None
                     for f in page.frames:
@@ -876,7 +909,7 @@ async def scrape_letters(browser: Browser, worker_id: int, assignments: List[Dic
             pass
 
 
-async def scrape_term(browser: Browser, term_code: str, worker_assignments: List[List[Dict[str, int | str]]], existing_codes: Set[str] = None, title_code_map: Dict[str, str] = None) -> List[Dict[str, Any]]:
+async def scrape_term(browser: Browser, term_code: str, worker_assignments: List[List[Dict[str, int | str]]], existing_codes: Set[str] = None, title_code_map: Dict[str, str] = None, browser_visible: Browser = None, visible_letter: str = "") -> List[Dict[str, Any]]:
     """Run workers for a single term, return all course data for that term."""
     term_label = TERM_LABELS.get(term_code, term_code)
     console.print(f"\n{'='*60}")
@@ -891,6 +924,11 @@ async def scrape_term(browser: Browser, term_code: str, worker_assignments: List
 
     tasks = []
     for worker_id, assignments in enumerate(worker_assignments, start=1):
+        worker_browser = browser
+        if browser_visible and visible_letter:
+            if any(str(a.get("letter", "")).upper() == visible_letter for a in assignments):
+                worker_browser = browser_visible
+
         async def worker_task(browser_inst, w_id, assignment_group, t_code, exist_c, title_lookup):
             max_retries = 5
             for attempt in range(max_retries):
@@ -912,7 +950,7 @@ async def scrape_term(browser: Browser, term_code: str, worker_assignments: List
                     
         tasks.append(
             asyncio.create_task(
-                worker_task(browser, worker_id, assignments, term_code, existing_codes, title_code_map)
+                worker_task(worker_browser, worker_id, assignments, term_code, existing_codes, title_code_map)
             )
         )
         if len(worker_assignments) > 1:
@@ -945,7 +983,7 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None, course
     selected_letters = parse_selected_letters(letters)
     title_code_map = load_course_title_code_map()
     worker_threshold = validate_courses_per_worker(courses_per_worker)
-    append_output = skip_existing or letters is not None
+    append_output = True  # Always merge into existing files instead of overwriting
     if letters is not None:
         console.print(f"[cyan]Scraping selected letters only: {', '.join(selected_letters)}[/cyan]")
     
@@ -962,6 +1000,8 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None, course
     with Live(get_renderable=generate_table, refresh_per_second=4, console=console) as live:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=HEADLESS)
+            visible_letter = os.getenv("VISIBLE_WORKER_LETTER", "").strip().upper()
+            browser_visible = await p.chromium.launch(headless=False) if visible_letter else None
             try:
                 all_terms_data = load_existing_schedule_output(output_path) if append_output else []
 
@@ -979,7 +1019,7 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None, course
                     if not worker_assignments:
                         term_results = []
                     else:
-                        term_results = await scrape_term(browser, term_code, worker_assignments, existing_codes, title_code_map)
+                        term_results = await scrape_term(browser, term_code, worker_assignments, existing_codes, title_code_map, browser_visible, visible_letter)
 
                     if append_output:
                         all_terms_data = merge_term_results(all_terms_data, term_label, term_results)
@@ -1006,6 +1046,8 @@ async def run(skip_existing: bool = False, letters: Optional[str] = None, course
             finally:
                 console.print("Closing browser...")
                 await browser.close()
+                if browser_visible:
+                    await browser_visible.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scrape Mosaic course schedules")
@@ -1025,10 +1067,16 @@ if __name__ == "__main__":
         default=100,
         help="Maximum course count assigned to each worker after the per-letter count pass. Defaults to 100.",
     )
+    parser.add_argument(
+        "--terms",
+        help="Comma-separated list of term codes to scrape, e.g. 2269,2271. Overrides the default TARGET_TERMS.",
+    )
     args = parser.parse_args()
     try:
         parse_selected_letters(args.letters)
         courses_per_worker = validate_courses_per_worker(args.courses_per_worker)
+        if args.terms:
+            TARGET_TERMS = [t.strip() for t in args.terms.split(",") if t.strip()]
     except ValueError as e:
         parser.error(str(e))
     asyncio.run(run(skip_existing=args.skip_existing, letters=args.letters, courses_per_worker=courses_per_worker))
