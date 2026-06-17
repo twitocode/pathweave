@@ -13,7 +13,10 @@
 	let sectionCount: number = $state(0);
 	let terms: string[] = $state([]);
 
-	$inspect(sections).with(console.log);
+  const restructureData = () => {
+    
+  }
+
 	const getCourseInfo = async () => {
 		const res = await fetch(getCourseSectionsByTerm(course!.value, term));
 		if (res.ok) {

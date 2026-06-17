@@ -432,7 +432,9 @@ func promoteSections(ctx context.Context, q *db.Queries, schedules []rawSchedule
 			}
 			insertedSections = append(insertedSections, normalizedSection{
 				ID:            sectionID,
+				Name:          name,
 				Type:          sectionType,
+				ParentName:    strings.TrimSpace(section.Parent),
 				InstructorSet: getSectionInstructorSet(section),
 			})
 		}

@@ -235,35 +235,27 @@ func detectDeliveryMode(section rawSectionPayload) (string, bool) {
 }
 
 func buildSectionReferences(sections []normalizedSection) []sectionReference {
-	parents := make([]normalizedSection, 0)
-	children := make([]normalizedSection, 0)
+	// Build a name -> ID lookup for all sections.
+	nameToID := make(map[string]int32, len(sections))
 	for _, section := range sections {
-		switch section.Type {
-		case "LEC", "SEM":
-			parents = append(parents, section)
-		case "LAB", "TUT":
-			children = append(children, section)
-		}
+		nameToID[section.Name] = section.ID
 	}
+
 	refs := make([]sectionReference, 0)
-	for _, parent := range parents {
-		for _, child := range children {
-			if len(child.InstructorSet) == 0 || len(parent.InstructorSet) == 0 || intersects(parent.InstructorSet, child.InstructorSet) {
-				refs = append(refs, sectionReference{ParentID: parent.ID, ChildID: child.ID})
-			}
+	for _, section := range sections {
+		if section.ParentName == "" {
+			continue
 		}
+		parentID, ok := nameToID[section.ParentName]
+		if !ok {
+			continue
+		}
+		refs = append(refs, sectionReference{ParentID: parentID, ChildID: section.ID})
 	}
 	return refs
 }
 
-func intersects(a, b map[string]struct{}) bool {
-	for key := range a {
-		if _, ok := b[key]; ok {
-			return true
-		}
-	}
-	return false
-}
+
 
 func collectScheduleTeacherNames(schedules []rawScheduleCoursePayload) map[string]struct{} {
 	names := make(map[string]struct{})
