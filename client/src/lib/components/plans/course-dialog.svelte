@@ -3,21 +3,25 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { getCourseSectionsByTerm } from '$lib/server-url';
-	import type { Schedule } from '$lib/types';
+	import type { Schedule, TermNumber } from '$lib/types';
+	import { cn, getTermString } from '$lib/utils';
 
 	let { open = $bindable(false), courseValue = '', term = '' } = $props();
 	const course = $derived(COURSES.find((c) => c.value === courseValue));
 
 	let sections: Record<string, Schedule[]> = $state({});
 	let sectionCount: number = $state(0);
+	let terms: string[] = $state([]);
 
 	$inspect(sections).with(console.log);
 	const getCourseInfo = async () => {
 		const res = await fetch(getCourseSectionsByTerm(course!.value, term));
 		if (res.ok) {
 			const data = await res.json();
+			console.log(data);
 			sections = data.sections;
 			sectionCount = data.count;
+			terms = data.terms ?? [];
 		}
 	};
 
@@ -29,28 +33,37 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-106.25">
+	<Dialog.Content class={cn({ 'sm:max-w-500':  terms.includes(term) })}>
 		<Dialog.Header>
-			<Dialog.Title>{course?.label || 'Course Details'}</Dialog.Title>
+			<Dialog.Title class="font-bold text-lg md:text-xl">{course?.label || 'Course Details'}</Dialog.Title>
 			<Dialog.Description>
-				Here you can see the details for this course and add it to your plan.
+				See the details for this course and add it to your plan.
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="py-4">
-			{#if course}
-				<p class="text-sm">Course value: {course.value}</p>
-			{:else}
-				<p class="text-sm">No course selected.</p>
-			{/if}
-			sections: {sectionCount}
-			{#each Object.entries(sections) as [name, schedules]}
-				<div>
-					<strong>{name}</strong>
-					{#each schedules as schedule}
-						{schedule.instructor}
-					{/each}
+			{#if sectionCount == 0}
+				<div class="flex flex-col gap-2">
+					<span> Course is unavailable for this semester </span>
+					{#if terms.length > 0}
+						<span class="text-lg font-bold"
+							>Available in {terms.map(
+								(x, i) =>
+									getTermString(x as TermNumber) +
+									(i < terms.length && terms.length > 1 ? ', ' : '')
+							)}</span
+						>
+					{/if}
 				</div>
-			{/each}
+			{:else}
+				{#each Object.entries(sections) as [name, schedules]}
+					<div>
+						<strong>{name}</strong>
+						{#each schedules as schedule}
+							{schedule.instructor}
+						{/each}
+					</div>
+				{/each}
+			{/if}
 		</div>
 		<Dialog.Footer>
 			<Button onclick={() => (open = false)}>Close</Button>

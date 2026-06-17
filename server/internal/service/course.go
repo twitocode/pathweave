@@ -44,6 +44,7 @@ type Schedule struct {
 	Instructor    string  `json:"instructor"`
 	AvgDifficulty float64 `json:"avg_difficulty"`
 	AvgRating     float64 `json:"avg_rating"`
+	Parent        string  `json:"parent"`
 }
 
 func NewCourseService(queries *db.Queries, log *zap.Logger, es *EmbeddingService, ais *AIService) *CourseService {
@@ -120,6 +121,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 			Instructor:    fmt.Sprintf("%v", r.InstructorName),
 			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
 			AvgRating:     common.ToFloat64(r.AvgRating),
+			Parent:        r.Parent,
 		}
 		count++
 	}
@@ -134,6 +136,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 type GroupedSectionResults struct {
 	Sections map[string][]*Schedule `json:"sections"`
 	Count    int                    `json:"count"`
+	Terms    []string               `json:"terms"`
 }
 
 func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code string, term string) (*GroupedSectionResults, error) {
@@ -144,6 +147,18 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code strin
 
 	if err != nil {
 		return nil, err
+	}
+
+	courseTermsStr, err := cs.db.GetTermsForCourse(ctx, code)
+	var courseTerms []string
+	if err == nil {
+		for _, termStr := range courseTermsStr {
+			if num, ok := common.TermStringToNumber[termStr]; ok {
+				courseTerms = append(courseTerms, num)
+			}
+		}
+	} else {
+		cs.log.Warn("could not get terms for course", zap.String("code", code), zap.Error(err))
 	}
 
 	schedules := make(map[string][]*Schedule)
@@ -164,6 +179,7 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code strin
 			Instructor:    fmt.Sprintf("%v", r.InstructorName),
 			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
 			AvgRating:     common.ToFloat64(r.AvgRating),
+			Parent:        r.Parent,
 		}
 		schedules[r.Section] = append(schedules[r.Section], schedule)
 		count++
@@ -172,6 +188,7 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code strin
 	result := &GroupedSectionResults{
 		Sections: schedules,
 		Count:    count,
+		Terms:    courseTerms,
 	}
 	return result, nil
 }

@@ -23,3 +23,12 @@ var TermNumberToString = map[string]string{
 	"2271": "Winter 2027",
 	"2275": "Spring/Summer 2027",
 }
+
+var TermStringToNumber = map[string]string{
+	"Fall 2025":          "2259",
+	"Winter 2026":        "2261",
+	"Spring/Summer 2026": "2265",
+	"Fall 2026":          "2269",
+	"Winter 2027":        "2271",
+	"Spring/Summer 2027": "2275",
+}

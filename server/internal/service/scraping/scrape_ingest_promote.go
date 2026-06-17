@@ -124,7 +124,7 @@ func (s *ScrapeIngestService) promoteRunInTx(ctx context.Context, qtx *db.Querie
 	log.Info("scrape promote linked course teachers")
 
 	log.Info("scrape promote deleting sections for terms", zap.Strings("terms", terms))
-	
+
 	var normalizedTerms []string
 	for _, term := range terms {
 		normalizedTerms = append(normalizedTerms, normalizeTerm(term))
@@ -210,12 +210,27 @@ func promoteCourses(ctx context.Context, q *db.Queries, courses []rawCoursePaylo
 }
 
 func promoteTeachers(ctx context.Context, q *db.Queries, teachers []rawTeacherPayload, scheduleTeacherNames map[string]struct{}) error {
-	knownNames := make(map[string]struct{}, len(teachers))
+	// 1. Deduplicate incoming teachers by keeping only the one with the most ratings per name
+	bestTeachers := make(map[string]rawTeacherPayload)
 	for _, teacher := range teachers {
 		name := strings.TrimSpace(teacher.Name)
 		if name == "" {
 			continue
 		}
+		key := strings.ToLower(name)
+		if existing, ok := bestTeachers[key]; ok {
+			if teacher.NumRatings > existing.NumRatings {
+				bestTeachers[key] = teacher
+			}
+		} else {
+			bestTeachers[key] = teacher
+		}
+	}
+
+	// 2. Upsert the deduplicated best teachers
+	knownNames := make(map[string]struct{}, len(bestTeachers))
+	for _, teacher := range bestTeachers {
+		name := strings.TrimSpace(teacher.Name)
 		rmpID := strings.TrimSpace(teacher.ID)
 		if rmpID == "" {
 			return errors.New("teacher id is required")

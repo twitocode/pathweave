@@ -28,6 +28,6 @@ type ProgramRequirementsInfo struct {
 }
 
 type PlanInfo struct {
-  Title string `json:"title"`
-  Term string `json:"term"`
+	Title string `json:"title"`
+	Term  string `json:"term"`
 }

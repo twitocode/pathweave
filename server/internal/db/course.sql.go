@@ -76,8 +76,8 @@ func (q *Queries) GetAllCourseCodes(ctx context.Context) ([]string, error) {
 
 const getCourseByCode = `-- name: GetCourseByCode :one
 SELECT id, code, name, description, restrictions, prerequisites, units, level_number
-FROM course
-WHERE code = $1
+FROM course c
+WHERE c.code = $1
 LIMIT 1
 `
 
@@ -137,14 +137,17 @@ SELECT
   sm.room,
   COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
-  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
+  COALESCE(parent_s.name, '') AS parent
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
 LEFT JOIN teacher AS t ON t.id = st.teacher_id
 JOIN course AS c ON c.id = s.course_id
+LEFT JOIN section_references sr ON sr.child_section_id = s.id
+LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE c.code = $1::text AND s.term = $2::text
-GROUP BY sm.id, s.id
+GROUP BY sm.id, s.id, parent_s.name
 ORDER BY s.name
 `
 
@@ -168,6 +171,7 @@ type GetCourseSectionsByTermRow struct {
 	InstructorName interface{}
 	AvgDifficulty  interface{}
 	AvgRating      interface{}
+	Parent         string
 }
 
 func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSectionsByTermParams) ([]GetCourseSectionsByTermRow, error) {
@@ -194,6 +198,7 @@ func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSect
 			&i.InstructorName,
 			&i.AvgDifficulty,
 			&i.AvgRating,
+			&i.Parent,
 		); err != nil {
 			return nil, err
 		}
@@ -314,13 +319,16 @@ SELECT
   sm.room,
   COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
-  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
+  COALESCE(parent_s.name, '') AS parent
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
 LEFT JOIN teacher AS t ON t.id = st.teacher_id
+LEFT JOIN section_references sr ON sr.child_section_id = s.id
+LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE s.course_id = $1
-GROUP BY sm.id, s.id
+GROUP BY sm.id, s.id, parent_s.name
 ORDER BY s.name
 `
 
@@ -339,6 +347,7 @@ type GetSchedulesForCourseRow struct {
 	InstructorName interface{}
 	AvgDifficulty  interface{}
 	AvgRating      interface{}
+	Parent         string
 }
 
 func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]GetSchedulesForCourseRow, error) {
@@ -365,6 +374,7 @@ func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]
 			&i.InstructorName,
 			&i.AvgDifficulty,
 			&i.AvgRating,
+			&i.Parent,
 		); err != nil {
 			return nil, err
 		}
@@ -374,4 +384,18 @@ func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTermsForCourse = `-- name: GetTermsForCourse :one
+SELECT coalesce(array_agg(DISTINCT s.term)::varchar[], '{}'::varchar[])::varchar[] as terms
+FROM section s
+JOIN course c ON c.id = s.course_id
+WHERE c.code = $1
+`
+
+func (q *Queries) GetTermsForCourse(ctx context.Context, code string) ([]string, error) {
+	row := q.db.QueryRow(ctx, getTermsForCourse, code)
+	var terms []string
+	err := row.Scan(&terms)
+	return terms, err
 }

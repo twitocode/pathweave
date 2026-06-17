@@ -4,10 +4,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ArrowLeftIcon } from 'phosphor-svelte';
 	import type { PageProps } from './$types';
+	import { getTermNumber, getTermString } from "$lib/utils";
 
 	let { data }: PageProps = $props();
 	const plan = $derived(data.plan);
 </script>
+
+<svelte:head>
+	<title> {plan?.title ?? plan?.term} | PathWeave</title>
+</svelte:head>
 
 <main class="mt-40 flex h-full w-full flex-col gap-4">
 	<section>
@@ -16,10 +21,11 @@
 			<span>Plans</span>
 		</Button>
 	</section>
-	<section>
+	<section class="space-y-2">
 		<h1 class="md:font-4xl font-gro text-3xl font-bold text-primary md:text-5xl">
 			{plan?.title}
 		</h1>
+    <span class="">{getTermString(plan!.term)}</span>
 	</section>
 	<section class="grid h-full gap-4 md:grid-cols-3">
 		<section class="">

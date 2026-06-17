@@ -1,6 +1,7 @@
 # Dev Environment Setup
 
 Use bun instead of node
+Use ruff for python linting/formatting 
 
 # Code Styling
 

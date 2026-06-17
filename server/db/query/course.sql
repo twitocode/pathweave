@@ -16,8 +16,8 @@ LIMIT 1;
 
 -- name: GetCourseByCode :one
 SELECT id, code, name, description, restrictions, prerequisites, units, level_number
-FROM course
-WHERE code = $1
+FROM course c
+WHERE c.code = $1
 LIMIT 1;
 
 -- name: GetSchedulesForCourse :many
@@ -35,13 +35,16 @@ SELECT
   sm.room,
   COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
-  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
+  COALESCE(parent_s.name, '') AS parent
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
 LEFT JOIN teacher AS t ON t.id = st.teacher_id
+LEFT JOIN section_references sr ON sr.child_section_id = s.id
+LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE s.course_id = $1
-GROUP BY sm.id, s.id
+GROUP BY sm.id, s.id, parent_s.name
 ORDER BY s.name;
 
 -- name: GetCourseSectionsByTerm :many
@@ -59,14 +62,17 @@ SELECT
   sm.room,
   COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
-  COALESCE(AVG(t.avg_rating), 0) AS avg_rating
+  COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
+  COALESCE(parent_s.name, '') AS parent
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
 LEFT JOIN teacher AS t ON t.id = st.teacher_id
 JOIN course AS c ON c.id = s.course_id
+LEFT JOIN section_references sr ON sr.child_section_id = s.id
+LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE c.code = sqlc.arg('code')::text AND s.term = sqlc.arg('term')::text
-GROUP BY sm.id, s.id
+GROUP BY sm.id, s.id, parent_s.name
 ORDER BY s.name;
 
 -- name: CreateEmbedding :exec
@@ -109,3 +115,9 @@ ORDER BY
         ELSE (c.embedding <=> sqlc.arg('embedding')::vector) - (CASE WHEN pc.program_id IS NOT NULL THEN 0.3 ELSE 0 END)
     END ASC
 LIMIT sqlc.arg('limit')::int;
+
+-- name: GetTermsForCourse :one
+SELECT coalesce(array_agg(DISTINCT s.term)::varchar[], '{}'::varchar[])::varchar[] as terms
+FROM section s
+JOIN course c ON c.id = s.course_id
+WHERE c.code = $1;

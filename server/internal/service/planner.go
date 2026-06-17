@@ -15,14 +15,14 @@ type PlannerService struct {
 }
 
 type Plan struct {
-	ID          string        `json:"id"`
-	Title       string        `json:"title"`
-	Term        string        `json:"term"`
-	CreatedAt   string        `json:"created_at"`
-	UpdatedAt   string        `json:"updated_at"`
-	UserID      string        `json:"user_id,omitempty"`
-	CourseCount int           `json:"course_count,omitempty"`
-	Courses     []PlanCourse  `json:"courses"`
+	ID          string       `json:"id"`
+	Title       string       `json:"title"`
+	Term        string       `json:"term"`
+	CreatedAt   string       `json:"created_at"`
+	UpdatedAt   string       `json:"updated_at"`
+	UserID      string       `json:"user_id,omitempty"`
+	CourseCount int          `json:"course_count,omitempty"`
+	Courses     []PlanCourse `json:"courses"`
 }
 
 type PlanCourse struct {

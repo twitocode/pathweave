@@ -5,7 +5,7 @@
 </script>
 
 <div class="mb-8 flex flex-col items-center gap-3">
-	<div class="flex w-full max-w-xs gap-px">
+	<div class="flex w-full max-w-xs gap-2">
 		{#each [1, 2, 3] as s (s)}
 			<div
 				class={cn(

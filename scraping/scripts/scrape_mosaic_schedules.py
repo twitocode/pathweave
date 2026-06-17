@@ -798,8 +798,7 @@ async def scrape_letters(browser: Browser, worker_id: int, assignments: List[Dic
                                         start_time: getText("MTGPAT_START$"),
                                         end_time: getText("MTGPAT_END$"),
                                         room: getText("MTGPAT_ROOM$"),
-                                        instructor: getText("MTGPAT_INSTR$"),
-                                        dates: getText("MTGPAT_DATES$")
+                                        instructor: getText("MTGPAT_INSTR$")
                                     });
                                 }
                                 

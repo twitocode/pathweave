@@ -17,6 +17,8 @@ export interface TeacherInfo {
 	numRatings: number;
 }
 
+
+
 export interface PlanCourse {
 	id: string;
 	courseId: number;
@@ -78,9 +80,11 @@ export interface Schedule {
 	instructor: string;
 	avg_difficulty: number;
 	avg_rating: number;
+	parent: string;
 }
 
 export interface GroupedSectionResults {
 	sections: Record<string, Schedule[]>;
 	count: number;
+	terms: TermNumber[];
 }
