@@ -30,7 +30,7 @@
 	<div class="my-20 space-y-8">
 		<span class="text-4xl font-bold">Plans</span>
 		<div class="mt-7 grid gap-8 sm:grid-cols-2 md:grid-cols-3">
-			{#each data.plans as plan, i (plan.id)}
+			{#each data.plans?.sort((a, b) => parseInt(b.term) - parseInt(a.term)) as plan, i (plan.id)}
 				<PlanComp {plan} index={i} />
 			{/each}
 			<Dialog.Root>

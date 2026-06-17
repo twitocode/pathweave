@@ -60,43 +60,36 @@ func HandleGetSchedulesForCourse(cs *service.CourseService) http.HandlerFunc {
 
 func HandleGetCourseSectionsByTerm(cs *service.CourseService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "course_id")
-		var body struct {
-			Term string `json:"term"`
-		}
+		code := chi.URLParam(r, "code")
+		term := r.URL.Query().Get("term")
 
-		err := common.DecodeJSON(r, &body)
-		if err != nil {
-			common.WriteError(w, http.StatusBadRequest, "invalid json in request")
+		if code == "" {
+			common.WriteError(w, http.StatusBadRequest, "course code not provided")
 			return
 		}
 
-		course_id, err := strconv.Atoi(id)
-		if err != nil {
-			common.WriteError(w, http.StatusBadRequest, "course id is not an integer")
-			return
-		}
-
-		if body.Term == "" {
+		if term == "" {
 			common.WriteError(w, http.StatusBadRequest, "term not provided")
 			return
 		}
 
-		if !slices.Contains(common.ValidTerms, body.Term) {
+		if !slices.Contains(common.ValidTerms, term) {
 			common.WriteError(w, http.StatusBadRequest, "invalid term provided")
 			return
 		}
 
 		log := middleware.Logger(r)
-		termString := common.TermNumberToString[body.Term]
+		termString := common.TermNumberToString[term]
 
-		res, err := cs.GetCourseSectionsByTerm(r.Context(), course_id, termString)
+		res, err := cs.GetCourseSectionsByTerm(r.Context(), code, termString)
 		if err != nil {
-			log.Error("error getting course schedules", zap.Error(err))
+			log.Error("error getting course sections", zap.Error(err))
+			common.WriteError(w, http.StatusInternalServerError, "failed to get course sections")
+			return
 		}
 
 		if res.Count == 0 {
-			log.Warn(fmt.Sprintf("course with id %d has no schedules", course_id))
+			log.Warn(fmt.Sprintf("course with code %s has no sections", code))
 		}
 
 		common.WriteJSON(w, http.StatusOK, res)

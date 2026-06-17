@@ -3,7 +3,7 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import type { Plan } from '$lib/types';
-	import { cn } from '$lib/utils';
+	import { cn, getTermNumber, getTermString } from '$lib/utils';
 	import { GraduationCapIcon, TrashSimpleIcon } from 'phosphor-svelte';
 
 	type Props = {
@@ -11,6 +11,10 @@
 		index: number;
 	};
 	let { plan, index }: Props = $props();
+
+	
+
+	const term = $derived(getTermString(plan.term));
 
 	const tints = ['bg-purple-200', 'bg-blue-200', 'bg-teal-200', 'bg-rose-200'] as const;
 	const tint = $derived(tints[index % tints.length]);
@@ -44,7 +48,7 @@
 			>
 		</div>
 		<div class="flex w-full items-center justify-between">
-			<span class="font-semibold text-primary/80">{plan.term}</span>
+			<span class="font-semibold text-primary/80">{term}</span>
 			<Dialog.Root>
 				<Dialog.Trigger
 					type="button"

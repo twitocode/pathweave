@@ -136,10 +136,10 @@ type GroupedSectionResults struct {
 	Count    int                    `json:"count"`
 }
 
-func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, id int, term string) (*GroupedSectionResults, error) {
+func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code string, term string) (*GroupedSectionResults, error) {
 	rows, err := cs.db.GetCourseSectionsByTerm(ctx, db.GetCourseSectionsByTermParams{
-		CourseID: int64(id),
-		Term:     term,
+		Code: code,
+		Term: term,
 	})
 
 	if err != nil {

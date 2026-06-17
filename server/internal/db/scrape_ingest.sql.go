@@ -298,7 +298,7 @@ func (q *Queries) ListScrapeCourseIDs(ctx context.Context) ([]ListScrapeCourseID
 const listScrapeTeacherIDsByName = `-- name: ListScrapeTeacherIDsByName :many
 SELECT name, id
 FROM teacher
-ORDER BY name
+ORDER BY name ASC, num_ratings ASC
 `
 
 type ListScrapeTeacherIDsByNameRow struct {

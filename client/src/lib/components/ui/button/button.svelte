@@ -19,10 +19,10 @@
 			},
 			size: {
 				default:
-					"h-14 gap-4 px-6 text-2xl has-data-[icon=inline-end]:pr-6 has-data-[icon=inline-start]:pl-6 [&_svg:not([class*='size-'])]:size-7",
+					"h-10 gap-2.5 px-5 text-base has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4 [&_svg:not([class*='size-'])]:size-5",
 				xs: "h-8 gap-1.5 px-3 text-xs has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 [&_svg:not([class*='size-'])]:size-3",
-				sm: "h-10 gap-2 px-4 text-sm has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
-				lg: 'h-16 gap-4 px-10 text-3xl has-data-[icon=inline-end]:pr-8 has-data-[icon=inline-start]:pl-8 [&_svg:not([class*="size-"])]:size-8',
+				sm: "h-9 gap-2 px-4 text-sm has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
+				lg: "h-12 gap-3 px-6 text-lg has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5 [&_svg:not([class*='size-'])]:size-5",
 				icon: 'size-10 shrink-0 p-0 [&_svg]:block [&_svg]:size-4 [&_svg]:shrink-0',
 				'icon-xs': 'size-8 shrink-0 p-0 [&_svg]:block [&_svg]:size-3 [&_svg]:shrink-0',
 				'icon-sm': 'size-9 shrink-0 p-0 [&_svg]:block [&_svg]:size-3.5 [&_svg]:shrink-0',
@@ -43,6 +43,16 @@
 			variant?: ButtonVariant;
 			size?: ButtonSize;
 		};
+
+	function isAbsolute(href: string) {
+		return href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//');
+	}
+
+	function resolveHref(href: string) {
+		if (isAbsolute(href)) return href;
+		//@ts-expect-error
+		return resolve(href as Parameters<typeof resolve>[0]);
+	}
 </script>
 
 <script lang="ts">
@@ -64,7 +74,7 @@
 		bind:this={ref}
 		data-slot="button"
 		class={cn(buttonVariants({ variant, size }), className)}
-		href={disabled ? undefined : resolve(href)}
+		href={disabled ? undefined : resolveHref(href)}
 		aria-disabled={disabled}
 		role={disabled ? 'link' : undefined}
 		tabindex={disabled ? -1 : undefined}

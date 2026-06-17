@@ -51,7 +51,7 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 
 		r.Get("/{code}", handlers.HandleGetCourseByCode(s.Course))
 		r.Get("/{course_id}/schedules", handlers.HandleGetSchedulesForCourse(s.Course))
-		r.Get("/{course_id}/sections", handlers.HandleGetCourseSectionsByTerm(s.Course))
+		r.Get("/{code}/sections", handlers.HandleGetCourseSectionsByTerm(s.Course))
 		r.Post("/embeddings", handlers.HandleCreateAllCourseEmbeddings(s.Course))
 		r.Get("/search", handlers.HandleVectorSearchCourse(s.Course))
 	})
@@ -61,6 +61,7 @@ func addRoutes(r *chi.Mux, cfg *config.Config, s *Services) {
 
 		r.Post("/", handlers.HandleCreatePlan(s.Planner))
 		r.Get("/", handlers.HandleGetAllPlans(s.Planner))
+		r.Get("/{id}", handlers.HandleGetPlanInfo(s.Planner))
 	})
 
 	r.Route("/internal", func(r chi.Router) {

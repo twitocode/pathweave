@@ -35,3 +35,11 @@ export function getPlanHref(id: string): string {
 export function getAllPlansHref(): string {
 	return `${getApiOrigin()}/plan`;
 }
+
+export function getPlanInfo(id: string) {
+	return `${getApiOrigin()}/plan/${id}`;
+}
+
+export function getCourseSectionsByTerm(code: string, term: string | number) {
+	return `${getApiOrigin()}/courses/${code}/sections?term=${term}`;
+}

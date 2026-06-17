@@ -124,7 +124,13 @@ func (s *ScrapeIngestService) promoteRunInTx(ctx context.Context, qtx *db.Querie
 	log.Info("scrape promote linked course teachers")
 
 	log.Info("scrape promote deleting sections for terms", zap.Strings("terms", terms))
-	if err := deleteSectionsForTerms(ctx, qtx, terms); err != nil {
+	
+	var normalizedTerms []string
+	for _, term := range terms {
+		normalizedTerms = append(normalizedTerms, normalizeTerm(term))
+	}
+
+	if err := deleteSectionsForTerms(ctx, qtx, normalizedTerms); err != nil {
 		return err
 	}
 	log.Info("scrape promote deleted sections for terms")
@@ -229,6 +235,13 @@ func promoteTeachers(ctx context.Context, q *db.Queries, teachers []rawTeacherPa
 			return err
 		}
 		knownNames[strings.ToLower(name)] = struct{}{}
+	}
+
+	existingTeachers, err := q.ListScrapeTeacherIDsByName(ctx)
+	if err == nil {
+		for _, row := range existingTeachers {
+			knownNames[strings.ToLower(row.Name)] = struct{}{}
+		}
 	}
 
 	for name := range scheduleTeacherNames {

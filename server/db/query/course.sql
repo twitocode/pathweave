@@ -64,7 +64,8 @@ FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
 LEFT JOIN teacher AS t ON t.id = st.teacher_id
-WHERE s.course_id = $1 AND s.term = $2
+JOIN course AS c ON c.id = s.course_id
+WHERE c.code = sqlc.arg('code')::text AND s.term = sqlc.arg('term')::text
 GROUP BY sm.id, s.id
 ORDER BY s.name;
 

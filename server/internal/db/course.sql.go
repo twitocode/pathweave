@@ -142,14 +142,15 @@ FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
 LEFT JOIN teacher AS t ON t.id = st.teacher_id
-WHERE s.course_id = $1 AND s.term = $2
+JOIN course AS c ON c.id = s.course_id
+WHERE c.code = $1::text AND s.term = $2::text
 GROUP BY sm.id, s.id
 ORDER BY s.name
 `
 
 type GetCourseSectionsByTermParams struct {
-	CourseID int64
-	Term     string
+	Code string
+	Term string
 }
 
 type GetCourseSectionsByTermRow struct {
@@ -170,7 +171,7 @@ type GetCourseSectionsByTermRow struct {
 }
 
 func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSectionsByTermParams) ([]GetCourseSectionsByTermRow, error) {
-	rows, err := q.db.Query(ctx, getCourseSectionsByTerm, arg.CourseID, arg.Term)
+	rows, err := q.db.Query(ctx, getCourseSectionsByTerm, arg.Code, arg.Term)
 	if err != nil {
 		return nil, err
 	}

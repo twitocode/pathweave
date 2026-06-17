@@ -36,9 +36,15 @@ type Plan struct {
 	UserID    uuid.UUID
 }
 
-type PlanSection struct {
+type PlanCourse struct {
+	ID       uuid.UUID
 	PlanID   uuid.UUID
 	CourseID int64
+}
+
+type PlanSection struct {
+	PlanCourseID uuid.UUID
+	SectionID    int32
 }
 
 type Program struct {

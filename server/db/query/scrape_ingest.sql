@@ -139,7 +139,7 @@ ON CONFLICT (rmp_id) DO UPDATE SET
 -- name: ListScrapeTeacherIDsByName :many
 SELECT name, id
 FROM teacher
-ORDER BY name;
+ORDER BY name ASC, num_ratings ASC;
 
 -- name: UpsertScrapeProgram :one
 WITH updated AS (
