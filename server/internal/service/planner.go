@@ -127,7 +127,7 @@ func (ps *PlannerService) Get(ctx context.Context, user *db.User, id string) (*P
 		return nil, err
 	}
 
-	var courses []PlanCourse = []PlanCourse{}
+	var courses []PlanCourse
 	if len(data.Courses) > 0 {
 		if err := json.Unmarshal(data.Courses, &courses); err != nil {
 			return nil, err

@@ -20,7 +20,12 @@
 				Continue with your Google account to get started.
 			</p>
 
-			<Button href={getAuthLoginHref()} variant="secondary" size="sm" class="shadow-[inset_0_0_5px_1px_rgba(255,255,255,0.2)]">
+			<Button
+				href={getAuthLoginHref()}
+				variant="secondary"
+				size="sm"
+				class="shadow-[inset_0_0_5px_1px_rgba(255,255,255,0.2)]"
+			>
 				<span class="inline-flex size-6 shrink-0 items-center justify-center">
 					<Google />
 				</span>

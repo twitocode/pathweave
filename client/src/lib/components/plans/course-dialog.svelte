@@ -13,9 +13,7 @@
 	let sectionCount: number = $state(0);
 	let terms: string[] = $state([]);
 
-  const restructureData = () => {
-    
-  }
+	const restructureData = () => {};
 
 	const getCourseInfo = async () => {
 		const res = await fetch(getCourseSectionsByTerm(course!.value, term));
@@ -25,6 +23,8 @@
 			sections = data.sections;
 			sectionCount = data.count;
 			terms = data.terms ?? [];
+
+			restructureData();
 		}
 	};
 
@@ -36,9 +36,11 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class={cn({ 'sm:max-w-500':  terms.includes(term) })}>
+	<Dialog.Content class={cn({ 'sm:max-w-500': terms.includes(term) })}>
 		<Dialog.Header>
-			<Dialog.Title class="font-bold text-lg md:text-xl">{course?.label || 'Course Details'}</Dialog.Title>
+			<Dialog.Title class="text-lg font-bold md:text-xl"
+				>{course?.label || 'Course Details'}</Dialog.Title
+			>
 			<Dialog.Description>
 				See the details for this course and add it to your plan.
 			</Dialog.Description>
@@ -58,10 +60,10 @@
 					{/if}
 				</div>
 			{:else}
-				{#each Object.entries(sections) as [name, schedules]}
+				{#each Object.entries(sections) as [name, schedules] (name)}
 					<div>
 						<strong>{name}</strong>
-						{#each schedules as schedule}
+						{#each schedules as schedule (schedule.id)}
 							{schedule.instructor}
 						{/each}
 					</div>

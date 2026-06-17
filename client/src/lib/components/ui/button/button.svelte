@@ -1,3 +1,4 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts" module>
 	import { resolve } from '$app/paths';
 	import { cn, type WithElementRef } from '$lib/utils.js';
@@ -47,12 +48,6 @@
 	function isAbsolute(href: string) {
 		return href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//');
 	}
-
-	function resolveHref(href: string) {
-		if (isAbsolute(href)) return href;
-		//@ts-expect-error
-		return resolve(href as Parameters<typeof resolve>[0]);
-	}
 </script>
 
 <script lang="ts">
@@ -74,7 +69,8 @@
 		bind:this={ref}
 		data-slot="button"
 		class={cn(buttonVariants({ variant, size }), className)}
-		href={disabled ? undefined : resolveHref(href)}
+		//@ts-expect-error svelte links
+		href={disabled ? undefined : isAbsolute(href) ? href : resolve(href)}
 		aria-disabled={disabled}
 		role={disabled ? 'link' : undefined}
 		tabindex={disabled ? -1 : undefined}

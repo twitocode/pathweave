@@ -3,7 +3,7 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import type { Plan } from '$lib/types';
-	import { cn, getTermNumber, getTermString } from '$lib/utils';
+	import { cn, getTermString } from '$lib/utils';
 	import { GraduationCapIcon, TrashSimpleIcon } from 'phosphor-svelte';
 
 	type Props = {
@@ -11,8 +11,6 @@
 		index: number;
 	};
 	let { plan, index }: Props = $props();
-
-	
 
 	const term = $derived(getTermString(plan.term));
 

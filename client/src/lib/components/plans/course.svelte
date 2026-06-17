@@ -8,7 +8,6 @@
 
 	let { info }: Props = $props();
 
-	$inspect(info.types).with(console.log);
 	const classTypes = $derived(
 		info.types
 			.map((x, i) => {
@@ -37,7 +36,7 @@
 	<span>
 		Professors Include:
 		<span class="space-y-2 space-x-2 font-medium">
-			{#each info.teachers as teacher}
+			{#each info.teachers as teacher (teacher.id)}
 				{#if teacher.name !== 'Staff'}
 					<Button variant="link" class="p-0 text-white dark:text-black">{teacher.name}</Button>
 				{/if}

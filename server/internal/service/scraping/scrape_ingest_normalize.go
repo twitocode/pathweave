@@ -255,8 +255,6 @@ func buildSectionReferences(sections []normalizedSection) []sectionReference {
 	return refs
 }
 
-
-
 func collectScheduleTeacherNames(schedules []rawScheduleCoursePayload) map[string]struct{} {
 	names := make(map[string]struct{})
 	for _, course := range schedules {
