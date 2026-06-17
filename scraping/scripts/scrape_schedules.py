@@ -590,6 +590,7 @@ def combinations_to_sections(
                     "instructor": meta.get("instructor", "Staff"),
                     "room": meta.get("location", "TBD"),
                     "mode": meta.get("mode", "Unknown"),
+                    "parent": meta.get("parent", ""),
                     "details_seen": set(),
                     "details": [],
                 }
@@ -620,6 +621,7 @@ def combinations_to_sections(
                     "instructor": sec.get("instructor", "Staff"),
                     "room": sec.get("location", "TBD"),
                     "mode": sec.get("mode", "Unknown"),
+                    "parent": sec.get("parent", ""),
                     "details_seen": set(),
                     "details": [{
                         "days": "TBA",
@@ -637,6 +639,7 @@ def combinations_to_sections(
             "section_name": entry["section_name"],
             "session": entry["session"],
             "status": entry["status"],
+            "parent": entry.get("parent", ""),
             "details": entry["details"],
         })
     return result
@@ -768,24 +771,60 @@ async def scrape_course_combinations(
 
             try:
                 # Sections details (Instructor, Room, etc.)
+                # Parse by vsbselectionnew groups to capture parent-child relationships.
+                # Each vsbselectionnew label groups a parent (first type_block, e.g. LEC)
+                # with its children (subsequent type_blocks, e.g. LAB/TUT).
                 section_blocks: List[Dict[str, Any]] = []
-                type_blocks = legend_block.locator(".selection_table .type_block")
-                row_count = await type_blocks.count()
-                for j in range(row_count):
-                    type_block = type_blocks.nth(j)
-                    section_label = (await type_block.inner_text()).strip()
-                    section_row = type_block.locator("xpath=ancestor::tr[1]")
-                    row_txt = await section_row.inner_text()
-                    parsed = parse_section_details(" ".join(row_txt.split()))
+                selection_groups = legend_block.locator("label.vsbselectionnew")
+                group_count = await selection_groups.count()
 
-                    type_match = re.search(r"(LEC|LAB|TUT)\s+[A-Z0-9]+", section_label)
-                    section_label = (
-                        type_match.group(0)
-                        if type_match
-                        else section_label or f"Section {j+1}"
-                    )
+                if group_count > 0:
+                    for g in range(group_count):
+                        group = selection_groups.nth(g)
+                        type_blocks = group.locator(".selection_table .type_block")
+                        row_count = await type_blocks.count()
 
-                    section_blocks.append({"section": section_label, **parsed})
+                        parent_label = ""
+                        for j in range(row_count):
+                            type_block = type_blocks.nth(j)
+                            section_label = (await type_block.inner_text()).strip()
+                            section_row = type_block.locator("xpath=ancestor::tr[1]")
+                            row_txt = await section_row.inner_text()
+                            parsed = parse_section_details(" ".join(row_txt.split()))
+
+                            type_match = re.search(r"(LEC|LAB|TUT|SEM)\s+[A-Z0-9]+", section_label)
+                            section_label = (
+                                type_match.group(0)
+                                if type_match
+                                else section_label or f"Section {j+1}"
+                            )
+
+                            if j == 0:
+                                # First type_block in the group is the parent
+                                parent_label = section_label
+                                section_blocks.append({"section": section_label, "parent": "", **parsed})
+                            else:
+                                # Subsequent type_blocks are children of the parent
+                                section_blocks.append({"section": section_label, "parent": parent_label, **parsed})
+                else:
+                    # Fallback: no vsbselectionnew groups found, use flat iteration
+                    type_blocks = legend_block.locator(".selection_table .type_block")
+                    row_count = await type_blocks.count()
+                    for j in range(row_count):
+                        type_block = type_blocks.nth(j)
+                        section_label = (await type_block.inner_text()).strip()
+                        section_row = type_block.locator("xpath=ancestor::tr[1]")
+                        row_txt = await section_row.inner_text()
+                        parsed = parse_section_details(" ".join(row_txt.split()))
+
+                        type_match = re.search(r"(LEC|LAB|TUT|SEM)\s+[A-Z0-9]+", section_label)
+                        section_label = (
+                            type_match.group(0)
+                            if type_match
+                            else section_label or f"Section {j+1}"
+                        )
+
+                        section_blocks.append({"section": section_label, "parent": "", **parsed})
 
                 # Prefer the visible hours text; it preserves multi-day blocks better than the h4 aria-label.
                 hours_text = ""
@@ -850,37 +889,41 @@ async def setup_timetable_page(
     context = await browser.new_context()
     page = await context.new_page()
 
-    update_worker(worker_id, current=f"[worker {worker_id}] Logging in...")
-    await page.goto("https://mytimetable.mcmaster.ca/login.jsp")
-    await page.fill("#word1", MOSAIC_USERNAME or "")
-    await page.fill("#word2", MOSAIC_PASSWORD or "")
-    await page.click("button[type='submit']")
-    await page.wait_for_load_state("networkidle")
-
-    update_worker(worker_id, current=f"[worker {worker_id}] Selecting term: {term_label}...")
-    
-    # Wait for the term cards container to load (give it up to 30 seconds)
     try:
-        await page.wait_for_selector("a.term-card-title", timeout=30000)
-    except Exception:
-        pass  # We will let the explicit checks below handle the failure
+        update_worker(worker_id, current=f"[worker {worker_id}] Logging in...")
+        await page.goto("https://mytimetable.mcmaster.ca/login.jsp")
+        await page.fill("#word1", MOSAIC_USERNAME or "")
+        await page.fill("#word2", MOSAIC_PASSWORD or "")
+        await page.click("button[type='submit']")
+        await page.wait_for_load_state("networkidle")
 
-    # Select term by its data-term attribute on the card container
-    term_card = page.locator(f"div.term-card[data-term='{term_data_id}'] a.term-card-title")
-    
-    if await term_card.count() > 0:
-        await term_card.first.click()
-    else:
-        # Fallback: try matching by text label
-        term_link = page.locator("a.term-card-title").filter(has_text=term_label)
-        if await term_link.count() > 0:
-            await term_link.first.click()
+        update_worker(worker_id, current=f"[worker {worker_id}] Selecting term: {term_label}...")
+        
+        # Wait for the term cards container to load (give it up to 30 seconds)
+        try:
+            await page.wait_for_selector("a.term-card-title", timeout=30000)
+        except Exception:
+            pass  # We will let the explicit checks below handle the failure
+
+        # Select term by its data-term attribute on the card container
+        term_card = page.locator(f"div.term-card[data-term='{term_data_id}'] a.term-card-title")
+        
+        if await term_card.count() > 0:
+            await term_card.first.click()
         else:
-            raise RuntimeError(f"Could not find term card for {term_label} (data-term={term_data_id})")
+            # Fallback: try matching by text label
+            term_link = page.locator("a.term-card-title").filter(has_text=term_label)
+            if await term_link.count() > 0:
+                await term_link.first.click()
+            else:
+                raise RuntimeError(f"Could not find term card for {term_label} (data-term={term_data_id})")
 
-    await page.wait_for_selector("#code_number", timeout=30000)
-    update_worker(worker_id, current=f"[worker {worker_id}] Ready ({term_label})")
-    return context, page
+        await page.wait_for_selector("#code_number", timeout=30000)
+        update_worker(worker_id, current=f"[worker {worker_id}] Ready ({term_label})")
+        return context, page
+    except Exception:
+        await context.close()
+        raise
 
 
 async def scrape_course_chunk(
@@ -896,31 +939,47 @@ async def scrape_course_chunk(
     update_worker(worker_id, status="Running", active="Init", total_courses=len(course_codes), started=True)
 
     try:
-        try:
-            context, page = await setup_timetable_page(browser, worker_id, term_data_id)
-        except Exception as e:
-            update_worker(worker_id, current=f"[worker {worker_id}] Failed during setup: {e}")
+        setup_success = False
+        for attempt in range(5):
+            try:
+                context, page = await setup_timetable_page(browser, worker_id, term_data_id)
+                setup_success = True
+                break
+            except Exception as e:
+                if attempt == 4:
+                    update_worker(worker_id, current=f"[worker {worker_id}] Failed during setup: {e}")
+                    return []
+                update_worker(worker_id, current=f"[worker {worker_id}] Setup failed (attempt {attempt+1}/5), retrying...")
+                await asyncio.sleep(2)
+        
+        if not setup_success:
             return []
 
         for idx, code in enumerate(course_codes, start=1):
             update_worker(worker_id, current=f"[worker {worker_id}] Course {idx}/{len(course_codes)}: {code}")
-            try:
-                result = await scrape_course_combinations(
-                    page, code, worker_id,
-                    term_label=term_label,
-                    course_title_map=course_title_map,
-                )
-                if result:
-                    results.append(result)
-                    update_worker(worker_id, courses=1, active=code)
-                    with open(partial_path, "w") as f:
-                        json.dump(results, f, indent=2)
-                    if not SCRAPE_SCHEDULE_DEBUG:
-                        update_worker(worker_id, current=f"[worker {worker_id}] {code}")
-            except Exception as e:
-                update_worker(worker_id, current=f"[worker {worker_id}] Error scraping {code}: {e}")
-            finally:
-                await asyncio.sleep(COURSE_COOLDOWN_SECONDS)
+            for attempt in range(5):
+                try:
+                    result = await scrape_course_combinations(
+                        page, code, worker_id,
+                        term_label=term_label,
+                        course_title_map=course_title_map,
+                    )
+                    if result:
+                        results.append(result)
+                        update_worker(worker_id, courses=1, active=code)
+                        with open(partial_path, "w") as f:
+                            json.dump(results, f, indent=2)
+                        if not SCRAPE_SCHEDULE_DEBUG:
+                            update_worker(worker_id, current=f"[worker {worker_id}] {code}")
+                    break
+                except Exception as e:
+                    if attempt == 4:
+                        update_worker(worker_id, current=f"[worker {worker_id}] Error scraping {code}: {e}")
+                    else:
+                        update_worker(worker_id, current=f"[worker {worker_id}] Retry {attempt+1}/5 for {code}")
+                        await asyncio.sleep(1)
+            # finally block logic moved outside the retry loop to apply per-course cooldown
+            await asyncio.sleep(COURSE_COOLDOWN_SECONDS)
 
         with open(partial_path, "w") as f:
             json.dump(results, f, indent=2)

@@ -31,51 +31,56 @@ export const load: PageServerLoad = async ({ locals, params, request }) => {
 				updatedAt: body.updated_at,
 				userID: body.user_id,
 				courseCount: body.course_count,
-				courses: body.courses?.map((c: any) => ({
-					id: c.id,
-					courseId: c.course_id,
-					code: c.code,
-					name: c.name,
-					description: c.description,
-					restrictions: c.restrictions,
-					prerequisites: c.prerequisites || [],
-					units: c.units,
-					types: c.types || [],
-					teachers: c.teachers?.map((t: any) => ({
-						id: t.id,
-						name: t.name,
-						avgRating: t.avg_rating,
-						avgDifficulty: t.avg_difficulty,
-						department: t.department,
-						rmpId: t.rmp_id,
-						numRatings: t.num_ratings
-					})) || [],
-					sections: c.sections?.map((s: any) => ({
-						id: s.id,
-						name: s.name,
-						type: s.type,
-						term: s.term,
-						mode: s.mode,
-						isInPerson: s.is_in_person,
-						meetings: s.meetings?.map((m: any) => ({
-							id: m.id,
-							days: m.days,
-							startTime: m.start_time,
-							endTime: m.end_time,
-							building: m.building,
-							room: m.room
-						})) || [],
-						teachers: s.teachers?.map((t: any) => ({
-							id: t.id,
-							name: t.name,
-							avgRating: t.avg_rating,
-							avgDifficulty: t.avg_difficulty,
-							department: t.department,
-							rmpId: t.rmp_id,
-							numRatings: t.num_ratings
-						})) || []
+				courses:
+					body.courses?.map((c: any) => ({
+						id: c.id,
+						courseId: c.course_id,
+						code: c.code,
+						name: c.name,
+						description: c.description,
+						restrictions: c.restrictions,
+						prerequisites: c.prerequisites || [],
+						units: c.units,
+						types: c.types || [],
+						teachers:
+							c.teachers?.map((t: any) => ({
+								id: t.id,
+								name: t.name,
+								avgRating: t.avg_rating,
+								avgDifficulty: t.avg_difficulty,
+								department: t.department,
+								rmpId: t.rmp_id,
+								numRatings: t.num_ratings
+							})) || [],
+						sections:
+							c.sections?.map((s: any) => ({
+								id: s.id,
+								name: s.name,
+								type: s.type,
+								term: s.term,
+								mode: s.mode,
+								isInPerson: s.is_in_person,
+								meetings:
+									s.meetings?.map((m: any) => ({
+										id: m.id,
+										days: m.days,
+										startTime: m.start_time,
+										endTime: m.end_time,
+										building: m.building,
+										room: m.room
+									})) || [],
+								teachers:
+									s.teachers?.map((t: any) => ({
+										id: t.id,
+										name: t.name,
+										avgRating: t.avg_rating,
+										avgDifficulty: t.avg_difficulty,
+										department: t.department,
+										rmpId: t.rmp_id,
+										numRatings: t.num_ratings
+									})) || []
+							})) || []
 					})) || []
-				})) || []
 			};
 
 			return {

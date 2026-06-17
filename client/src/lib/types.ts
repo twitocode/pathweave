@@ -17,8 +17,6 @@ export interface TeacherInfo {
 	numRatings: number;
 }
 
-
-
 export interface PlanCourse {
 	id: string;
 	courseId: number;

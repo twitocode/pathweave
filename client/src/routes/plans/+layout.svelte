@@ -6,7 +6,7 @@
 </script>
 
 <main
-	class="mx-auto flex max-w-7xl flex-col items-center justify-between py-5 text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100 h-screen"
+	class="mx-auto flex h-screen max-w-7xl flex-col items-center justify-between py-5 text-zinc-900 selection:bg-brand-purple selection:text-white dark:text-zinc-100"
 >
 	<Navbar />
 	{@render children()}

@@ -16,10 +16,6 @@
 	const filteredCourses = $derived(
 		COURSES.filter((c) => c.label.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 5)
 	);
-
-	function labelForCourse(value: string) {
-		return COURSES.find((c) => c.value === value)?.label || 'Search for a course...';
-	}
 </script>
 
 <div class="mb-4 w-full">
