@@ -46,6 +46,7 @@ type SectionInfo struct {
 	Term       string        `json:"term"`
 	Mode       string        `json:"mode"`
 	IsInPerson bool          `json:"is_in_person"`
+	ClassNumber int          `json:"class_number"`
 	Meetings   []MeetingInfo `json:"meetings"`
 	Teachers   []TeacherInfo `json:"teachers"`
 }

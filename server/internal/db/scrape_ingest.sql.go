@@ -83,18 +83,19 @@ func (q *Queries) CreateScrapeRun(ctx context.Context, arg CreateScrapeRunParams
 }
 
 const createScrapeSection = `-- name: CreateScrapeSection :one
-INSERT INTO section (course_id, name, type, term, mode, is_in_person)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO section (course_id, name, type, term, mode, is_in_person, class_number)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id
 `
 
 type CreateScrapeSectionParams struct {
-	CourseID   int64
-	Name       string
-	Type       string
-	Term       string
-	Mode       string
-	IsInPerson bool
+	CourseID    int64
+	Name        string
+	Type        string
+	Term        string
+	Mode        string
+	IsInPerson  bool
+	ClassNumber int16
 }
 
 func (q *Queries) CreateScrapeSection(ctx context.Context, arg CreateScrapeSectionParams) (int32, error) {
@@ -105,6 +106,7 @@ func (q *Queries) CreateScrapeSection(ctx context.Context, arg CreateScrapeSecti
 		arg.Term,
 		arg.Mode,
 		arg.IsInPerson,
+		arg.ClassNumber,
 	)
 	var id int32
 	err := row.Scan(&id)

@@ -113,13 +113,14 @@ type ScrapeRun struct {
 }
 
 type Section struct {
-	ID         int32
-	CourseID   int64
-	Name       string
-	Type       string
-	Term       string
-	Mode       string
-	IsInPerson bool
+	ID          int32
+	CourseID    int64
+	Name        string
+	Type        string
+	Term        string
+	Mode        string
+	IsInPerson  bool
+	ClassNumber int16
 }
 
 type SectionMeeting struct {

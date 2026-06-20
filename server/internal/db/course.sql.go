@@ -129,6 +129,7 @@ SELECT
   s.type,
   s.term,
   s.mode,
+  s.class_number,
   s.is_in_person,
   sm.days AS day,
   sm.start_time,
@@ -162,6 +163,7 @@ type GetCourseSectionsByTermRow struct {
 	Type           string
 	Term           string
 	Mode           string
+	ClassNumber    int16
 	IsInPerson     bool
 	Day            string
 	StartTime      pgtype.Time
@@ -189,6 +191,7 @@ func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSect
 			&i.Type,
 			&i.Term,
 			&i.Mode,
+			&i.ClassNumber,
 			&i.IsInPerson,
 			&i.Day,
 			&i.StartTime,
@@ -311,6 +314,7 @@ SELECT
   s.type,
   s.term,
   s.mode,
+  s.class_number,
   s.is_in_person,
   sm.days AS day,
   sm.start_time,
@@ -338,6 +342,7 @@ type GetSchedulesForCourseRow struct {
 	Type           string
 	Term           string
 	Mode           string
+	ClassNumber    int16
 	IsInPerson     bool
 	Day            string
 	StartTime      pgtype.Time
@@ -365,6 +370,7 @@ func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]
 			&i.Type,
 			&i.Term,
 			&i.Mode,
+			&i.ClassNumber,
 			&i.IsInPerson,
 			&i.Day,
 			&i.StartTime,

@@ -183,8 +183,8 @@ DELETE FROM section
 WHERE term = ANY($1::text[]);
 
 -- name: CreateScrapeSection :one
-INSERT INTO section (course_id, name, type, term, mode, is_in_person)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO section (course_id, name, type, term, mode, is_in_person, class_number)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id;
 
 -- name: CreateScrapeSectionMeeting :exec

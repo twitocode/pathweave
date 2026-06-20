@@ -74,6 +74,7 @@ type rawScheduleCoursePayload struct {
 type rawSectionPayload struct {
 	SectionName string              `json:"section_name"`
 	Parent      string              `json:"parent"`
+	ClassNumber int16               `json:"class_number"`
 	Details     []rawMeetingPayload `json:"details"`
 }
 

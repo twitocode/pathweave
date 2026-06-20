@@ -60,6 +60,7 @@ export const load: PageServerLoad = async ({ locals, params, request }) => {
 								term: s.term,
 								mode: s.mode,
 								isInPerson: s.is_in_person,
+								classNumber: s.class_number,
 								meetings:
 									s.meetings?.map((m: any) => ({
 										id: m.id,

@@ -38,6 +38,7 @@ export interface SectionInfo {
 	term: string;
 	mode: string;
 	isInPerson: boolean;
+	classNumber: number;
 	meetings: MeetingInfo[];
 	teachers: TeacherInfo[];
 }
@@ -70,6 +71,7 @@ export interface Schedule {
 	term: string;
 	mode: string;
 	is_in_person: boolean;
+	class_number: number;
 	day: string;
 	start_time: string;
 	end_time: string;

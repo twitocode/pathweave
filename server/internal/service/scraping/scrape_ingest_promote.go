@@ -382,12 +382,13 @@ func promoteSections(ctx context.Context, q *db.Queries, schedules []rawSchedule
 			}
 			mode, isInPerson := detectDeliveryMode(section)
 			sectionID, err := q.CreateScrapeSection(ctx, db.CreateScrapeSectionParams{
-				CourseID:   courseID,
-				Name:       name,
-				Type:       sectionType,
-				Term:       term,
-				Mode:       mode,
-				IsInPerson: isInPerson,
+				CourseID:    courseID,
+				Name:        name,
+				Type:        sectionType,
+				Term:        term,
+				Mode:        mode,
+				IsInPerson:  isInPerson,
+				ClassNumber: section.ClassNumber,
 			})
 			if err != nil {
 				return err

@@ -85,6 +85,7 @@ SELECT
                   'term', s.term,
                   'mode', s.mode,
                   'is_in_person', s.is_in_person,
+                  'class_number', s.class_number,
                   'meetings', (
                     SELECT COALESCE(
                       JSON_AGG(

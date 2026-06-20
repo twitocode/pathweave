@@ -591,6 +591,7 @@ def combinations_to_sections(
                     "room": meta.get("location", "TBD"),
                     "mode": meta.get("mode", "Unknown"),
                     "parent": meta.get("parent", ""),
+                    "class_number": meta.get("class_number", -1),
                     "details_seen": set(),
                     "details": [],
                 }
@@ -622,6 +623,7 @@ def combinations_to_sections(
                     "room": sec.get("location", "TBD"),
                     "mode": sec.get("mode", "Unknown"),
                     "parent": sec.get("parent", ""),
+                    "class_number": sec.get("class_number", -1),
                     "details_seen": set(),
                     "details": [{
                         "days": "TBA",
@@ -640,6 +642,7 @@ def combinations_to_sections(
             "session": entry["session"],
             "status": entry["status"],
             "parent": entry.get("parent", ""),
+            "class_number": entry.get("class_number", -1),
             "details": entry["details"],
         })
     return result
@@ -799,13 +802,23 @@ async def scrape_course_combinations(
                                 else section_label or f"Section {j+1}"
                             )
 
+                            crn_value = -1
+                            try:
+                                crn_el = section_row.locator(".crn_value")
+                                if await crn_el.count() > 0:
+                                    crn_text = (await crn_el.first.inner_text()).strip()
+                                    if crn_text.isdigit():
+                                        crn_value = int(crn_text)
+                            except Exception:
+                                pass
+
                             if j == 0:
                                 # First type_block in the group is the parent
                                 parent_label = section_label
-                                section_blocks.append({"section": section_label, "parent": "", **parsed})
+                                section_blocks.append({"section": section_label, "parent": "", "class_number": crn_value, **parsed})
                             else:
                                 # Subsequent type_blocks are children of the parent
-                                section_blocks.append({"section": section_label, "parent": parent_label, **parsed})
+                                section_blocks.append({"section": section_label, "parent": parent_label, "class_number": crn_value, **parsed})
                 else:
                     # Fallback: no vsbselectionnew groups found, use flat iteration
                     type_blocks = legend_block.locator(".selection_table .type_block")
@@ -824,7 +837,17 @@ async def scrape_course_combinations(
                             else section_label or f"Section {j+1}"
                         )
 
-                        section_blocks.append({"section": section_label, "parent": "", **parsed})
+                        crn_value = -1
+                        try:
+                            crn_el = section_row.locator(".crn_value")
+                            if await crn_el.count() > 0:
+                                crn_text = (await crn_el.first.inner_text()).strip()
+                                if crn_text.isdigit():
+                                    crn_value = int(crn_text)
+                        except Exception:
+                            pass
+
+                        section_blocks.append({"section": section_label, "parent": "", "class_number": crn_value, **parsed})
 
                 # Prefer the visible hours text; it preserves multi-day blocks better than the h4 aria-label.
                 hours_text = ""
