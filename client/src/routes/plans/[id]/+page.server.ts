@@ -89,8 +89,10 @@ export const load: PageServerLoad = async ({ locals, params, request }) => {
 			};
 		} else {
 			console.error('Could not fetch plan info');
+			throw redirect(308, '/plans');
 		}
 	} catch (err) {
 		console.log(err);
+		throw redirect(308, '/plans');
 	}
 };

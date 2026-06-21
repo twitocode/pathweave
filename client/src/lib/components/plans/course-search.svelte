@@ -6,8 +6,6 @@
 	import CaretUpDownIcon from 'phosphor-svelte/lib/CaretUpDown';
 	import CourseDialog from './course-dialog.svelte';
 
-	let { term = '' } = $props();
-
 	let open = $state(false);
 	let searchQuery = $state('');
 	let selectedCourseValue = $state('');
@@ -61,4 +59,4 @@
 	</Popover.Root>
 </div>
 
-<CourseDialog bind:open={dialogOpen} courseValue={selectedCourseValue} {term} />
+<CourseDialog bind:open={dialogOpen} courseValue={selectedCourseValue} />

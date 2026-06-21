@@ -45,6 +45,7 @@ type Schedule struct {
 	AvgDifficulty float64 `json:"avg_difficulty"`
 	AvgRating     float64 `json:"avg_rating"`
 	Parent        string  `json:"parent"`
+	ClassNumber   int     `json:"class_number"`
 }
 
 func NewCourseService(queries *db.Queries, log *zap.Logger, es *EmbeddingService, ais *AIService) *CourseService {
@@ -122,6 +123,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
 			AvgRating:     common.ToFloat64(r.AvgRating),
 			Parent:        r.Parent,
+			ClassNumber:   int(r.ClassNumber),
 		}
 		count++
 	}
@@ -180,6 +182,7 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code strin
 			AvgDifficulty: common.ToFloat64(r.AvgDifficulty),
 			AvgRating:     common.ToFloat64(r.AvgRating),
 			Parent:        r.Parent,
+			ClassNumber:   int(r.ClassNumber),
 		}
 		schedules[r.Section] = append(schedules[r.Section], schedule)
 		count++

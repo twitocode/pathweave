@@ -3,20 +3,59 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { getCourseSectionsByTerm } from '$lib/server-url';
+	import { PlanSymbol, type PlanStore } from '$lib/stores/plan.svelte';
 	import type { Schedule, TermNumber } from '$lib/types';
 	import { cn, getTermString } from '$lib/utils';
+	import { getContext } from 'svelte';
 
-	let { open = $bindable(false), courseValue = '', term = '' } = $props();
+	const planStore = getContext<PlanStore>(PlanSymbol);
+
+	let { open = $bindable(false), courseValue = '' } = $props();
 	const course = $derived(COURSES.find((c) => c.value === courseValue));
+	const courseName = $derived(course?.label.split(': ')[1]);
+	const courseCode = $derived(course?.label.split(': ')[0]);
 
 	let sections: Record<string, Schedule[]> = $state({});
 	let sectionCount: number = $state(0);
 	let terms: string[] = $state([]);
 
-	const restructureData = () => {};
+	const restructureData = () => {
+		type Result = {
+			name: string;
+			schedules: Schedule[];
+		};
+		const output: (Result & { children: Result[] })[] = [];
+
+		const skipped = [];
+		for (const [name, schedules] of Object.entries(sections)) {
+			if (name.startsWith('LEC') || name.startsWith('SEM')) {
+				output.push({
+					name,
+					schedules,
+					children: []
+				});
+			} else if (name.startsWith('TUT') || name.startsWith('LAB')) {
+				const parentName = schedules[0].parent;
+				const parent = output.find((x) => x.name == parentName);
+				if (!parent) {
+					skipped.push({ name, schedules });
+					continue;
+				}
+
+				parent.children.push({ name, schedules });
+			}
+		}
+		for (const [name, schedules] of Object.entries(sections)) {
+			const parentName = schedules[0].parent;
+			const parent = output.find((x) => x.name == parentName);
+			if (parent) parent.children.push({ name, schedules });
+		}
+
+    return output;
+	};
 
 	const getCourseInfo = async () => {
-		const res = await fetch(getCourseSectionsByTerm(course!.value, term));
+		const res = await fetch(getCourseSectionsByTerm(course!.value, planStore.termNumber));
 		if (res.ok) {
 			const data = await res.json();
 			console.log(data);
@@ -24,7 +63,7 @@
 			sectionCount = data.count;
 			terms = data.terms ?? [];
 
-			restructureData();
+			console.log(restructureData())
 		}
 	};
 
@@ -36,14 +75,16 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class={cn({ 'sm:max-w-500': terms.includes(term) })}>
+	<Dialog.Content class={cn({ 'sm:max-w-600': terms.includes(planStore.termString) })}>
 		<Dialog.Header>
-			<Dialog.Title class="text-lg font-bold md:text-xl"
-				>{course?.label || 'Course Details'}</Dialog.Title
-			>
-			<Dialog.Description>
-				See the details for this course and add it to your plan.
-			</Dialog.Description>
+			<Dialog.Title class="flex flex-col">
+				<span class="text-lg font-bold md:text-xl">
+					{courseCode || 'Course Details'}
+				</span>
+				<span class="opacity-75">
+					{courseName}
+				</span>
+			</Dialog.Title>
 		</Dialog.Header>
 		<div class="py-4">
 			{#if sectionCount == 0}
