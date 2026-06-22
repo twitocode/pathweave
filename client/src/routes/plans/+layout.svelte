@@ -1,8 +1,10 @@
 <script lang="ts">
 	import Navbar from '$lib/components/navbar.svelte';
+	import { setPlanStore } from '$lib/stores/plan.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+	setPlanStore();
 </script>
 
 <main

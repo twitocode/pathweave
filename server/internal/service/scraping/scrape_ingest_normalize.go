@@ -243,14 +243,16 @@ func buildSectionReferences(sections []normalizedSection) []sectionReference {
 
 	refs := make([]sectionReference, 0)
 	for _, section := range sections {
-		if section.ParentName == "" {
-			continue
+		for _, parentName := range section.ParentNames {
+			if parentName == "" {
+				continue
+			}
+			parentID, ok := nameToID[parentName]
+			if !ok {
+				continue
+			}
+			refs = append(refs, sectionReference{ParentID: parentID, ChildID: section.ID})
 		}
-		parentID, ok := nameToID[section.ParentName]
-		if !ok {
-			continue
-		}
-		refs = append(refs, sectionReference{ParentID: parentID, ChildID: section.ID})
 	}
 	return refs
 }

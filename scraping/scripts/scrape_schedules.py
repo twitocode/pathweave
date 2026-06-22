@@ -579,6 +579,25 @@ def combinations_to_sections(
             label = sec.get("section", "Unknown")
             section_meta[label] = sec
 
+            if label not in section_map:
+                section_map[label] = {
+                    "section_name": label,
+                    "session": "1",
+                    "status": "Open",
+                    "instructor": sec.get("instructor", "Staff"),
+                    "room": sec.get("location", "TBD"),
+                    "mode": sec.get("mode", "Unknown"),
+                    "parents": [],
+                    "class_number": sec.get("class_number", -1),
+                    "details_seen": set(),
+                    "details": [],
+                }
+            
+            # Aggregate parents from all combos
+            for p in sec.get("parents", []):
+                if p not in section_map[label]["parents"]:
+                    section_map[label]["parents"].append(p)
+
         for block in combo.get("schedule_blocks", []):
             label = block.get("section", "Unknown")
             if label not in section_map:
@@ -590,7 +609,7 @@ def combinations_to_sections(
                     "instructor": meta.get("instructor", "Staff"),
                     "room": meta.get("location", "TBD"),
                     "mode": meta.get("mode", "Unknown"),
-                    "parent": meta.get("parent", ""),
+                    "parents": [],
                     "class_number": meta.get("class_number", -1),
                     "details_seen": set(),
                     "details": [],
@@ -622,7 +641,7 @@ def combinations_to_sections(
                     "instructor": sec.get("instructor", "Staff"),
                     "room": sec.get("location", "TBD"),
                     "mode": sec.get("mode", "Unknown"),
-                    "parent": sec.get("parent", ""),
+                    "parents": [],
                     "class_number": sec.get("class_number", -1),
                     "details_seen": set(),
                     "details": [{
@@ -641,7 +660,7 @@ def combinations_to_sections(
             "section_name": entry["section_name"],
             "session": entry["session"],
             "status": entry["status"],
-            "parent": entry.get("parent", ""),
+            "parents": entry.get("parents", []),
             "class_number": entry.get("class_number", -1),
             "details": entry["details"],
         })
@@ -815,10 +834,10 @@ async def scrape_course_combinations(
                             if j == 0:
                                 # First type_block in the group is the parent
                                 parent_label = section_label
-                                section_blocks.append({"section": section_label, "parent": "", "class_number": crn_value, **parsed})
+                                section_blocks.append({"section": section_label, "parents": [], "class_number": crn_value, **parsed})
                             else:
                                 # Subsequent type_blocks are children of the parent
-                                section_blocks.append({"section": section_label, "parent": parent_label, "class_number": crn_value, **parsed})
+                                section_blocks.append({"section": section_label, "parents": [parent_label], "class_number": crn_value, **parsed})
                 else:
                     # Fallback: no vsbselectionnew groups found, use flat iteration
                     type_blocks = legend_block.locator(".selection_table .type_block")
@@ -847,7 +866,7 @@ async def scrape_course_combinations(
                         except Exception:
                             pass
 
-                        section_blocks.append({"section": section_label, "parent": "", "class_number": crn_value, **parsed})
+                        section_blocks.append({"section": section_label, "parents": [], "class_number": crn_value, **parsed})
 
                 # Prefer the visible hours text; it preserves multi-day blocks better than the h4 aria-label.
                 hours_text = ""

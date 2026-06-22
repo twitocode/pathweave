@@ -34,10 +34,10 @@ SELECT
   sm.end_time,
   sm.building,
   sm.room,
-  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(STRING_AGG(DISTINCT t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
   COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
-  COALESCE(parent_s.name, '') AS parent
+  COALESCE(ARRAY_AGG(DISTINCT parent_s.name) FILTER (WHERE parent_s.name IS NOT NULL), '{}'::varchar[])::varchar[] AS parents
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
@@ -45,7 +45,7 @@ LEFT JOIN teacher AS t ON t.id = st.teacher_id
 LEFT JOIN section_references sr ON sr.child_section_id = s.id
 LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE s.course_id = $1
-GROUP BY sm.id, s.id, parent_s.name
+GROUP BY sm.id, s.id
 ORDER BY s.name;
 
 -- name: GetCourseSectionsByTerm :many
@@ -62,10 +62,10 @@ SELECT
   sm.end_time,
   sm.building,
   sm.room,
-  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(STRING_AGG(DISTINCT t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
   COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
-  COALESCE(parent_s.name, '') AS parent
+  COALESCE(ARRAY_AGG(DISTINCT parent_s.name) FILTER (WHERE parent_s.name IS NOT NULL), '{}'::varchar[])::varchar[] AS parents
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
@@ -74,7 +74,7 @@ JOIN course AS c ON c.id = s.course_id
 LEFT JOIN section_references sr ON sr.child_section_id = s.id
 LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE c.code = sqlc.arg('code')::text AND s.term = sqlc.arg('term')::text
-GROUP BY sm.id, s.id, parent_s.name
+GROUP BY sm.id, s.id
 ORDER BY s.name;
 
 -- name: CreateEmbedding :exec

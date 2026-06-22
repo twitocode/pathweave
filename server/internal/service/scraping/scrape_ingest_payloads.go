@@ -73,7 +73,7 @@ type rawScheduleCoursePayload struct {
 
 type rawSectionPayload struct {
 	SectionName string              `json:"section_name"`
-	Parent      string              `json:"parent"`
+	Parents     []string            `json:"parents"`
 	ClassNumber int16               `json:"class_number"`
 	Details     []rawMeetingPayload `json:"details"`
 }
@@ -100,7 +100,7 @@ type normalizedSection struct {
 	ID            int32
 	Name          string
 	Type          string
-	ParentName    string
+	ParentNames   []string
 	InstructorSet map[string]struct{}
 }
 

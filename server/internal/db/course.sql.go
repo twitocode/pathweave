@@ -136,10 +136,10 @@ SELECT
   sm.end_time,
   sm.building,
   sm.room,
-  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(STRING_AGG(DISTINCT t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
   COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
-  COALESCE(parent_s.name, '') AS parent
+  COALESCE(ARRAY_AGG(DISTINCT parent_s.name) FILTER (WHERE parent_s.name IS NOT NULL), '{}'::varchar[])::varchar[] AS parents
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
@@ -148,7 +148,7 @@ JOIN course AS c ON c.id = s.course_id
 LEFT JOIN section_references sr ON sr.child_section_id = s.id
 LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE c.code = $1::text AND s.term = $2::text
-GROUP BY sm.id, s.id, parent_s.name
+GROUP BY sm.id, s.id
 ORDER BY s.name
 `
 
@@ -173,7 +173,7 @@ type GetCourseSectionsByTermRow struct {
 	InstructorName interface{}
 	AvgDifficulty  interface{}
 	AvgRating      interface{}
-	Parent         string
+	Parents        []string
 }
 
 func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSectionsByTermParams) ([]GetCourseSectionsByTermRow, error) {
@@ -201,7 +201,7 @@ func (q *Queries) GetCourseSectionsByTerm(ctx context.Context, arg GetCourseSect
 			&i.InstructorName,
 			&i.AvgDifficulty,
 			&i.AvgRating,
-			&i.Parent,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}
@@ -321,10 +321,10 @@ SELECT
   sm.end_time,
   sm.building,
   sm.room,
-  COALESCE(STRING_AGG(t.name, ', '), 'Staff') AS instructor_name,
+  COALESCE(STRING_AGG(DISTINCT t.name, ', '), 'Staff') AS instructor_name,
   COALESCE(AVG(t.avg_difficulty), 0) AS avg_difficulty,
   COALESCE(AVG(t.avg_rating), 0) AS avg_rating,
-  COALESCE(parent_s.name, '') AS parent
+  COALESCE(ARRAY_AGG(DISTINCT parent_s.name) FILTER (WHERE parent_s.name IS NOT NULL), '{}'::varchar[])::varchar[] AS parents
 FROM section AS s
 JOIN section_meeting AS sm ON sm.section_id = s.id
 LEFT JOIN section_teachers AS st ON st.section_id = s.id
@@ -332,7 +332,7 @@ LEFT JOIN teacher AS t ON t.id = st.teacher_id
 LEFT JOIN section_references sr ON sr.child_section_id = s.id
 LEFT JOIN section parent_s ON parent_s.id = sr.parent_section_id
 WHERE s.course_id = $1
-GROUP BY sm.id, s.id, parent_s.name
+GROUP BY sm.id, s.id
 ORDER BY s.name
 `
 
@@ -352,7 +352,7 @@ type GetSchedulesForCourseRow struct {
 	InstructorName interface{}
 	AvgDifficulty  interface{}
 	AvgRating      interface{}
-	Parent         string
+	Parents        []string
 }
 
 func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]GetSchedulesForCourseRow, error) {
@@ -380,7 +380,7 @@ func (q *Queries) GetSchedulesForCourse(ctx context.Context, courseID int64) ([]
 			&i.InstructorName,
 			&i.AvgDifficulty,
 			&i.AvgRating,
-			&i.Parent,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}

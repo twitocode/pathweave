@@ -435,7 +435,7 @@ func promoteSections(ctx context.Context, q *db.Queries, schedules []rawSchedule
 				ID:            sectionID,
 				Name:          name,
 				Type:          sectionType,
-				ParentName:    strings.TrimSpace(section.Parent),
+				ParentNames:   section.Parents,
 				InstructorSet: getSectionInstructorSet(section),
 			})
 		}

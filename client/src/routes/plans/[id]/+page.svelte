@@ -2,19 +2,16 @@
 	import CourseSearch from '$lib/components/plans/course-search.svelte';
 	import Course from '$lib/components/plans/course.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { PlanStore, PlanSymbol } from '$lib/stores/plan.svelte';
+	import { getPlanStore } from '$lib/stores/plan.svelte';
 	import { ArrowLeftIcon } from 'phosphor-svelte';
-	import { setContext } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	const store = new PlanStore();
+	const store = getPlanStore();
 	$effect(() => {
 		store.current = data.plan;
 	});
-
-	setContext(PlanSymbol, store);
 </script>
 
 <svelte:head>

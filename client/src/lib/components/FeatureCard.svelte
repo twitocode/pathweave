@@ -19,7 +19,7 @@
 		src="/pw-route-icon.svg"
 		alt=""
 		aria-hidden="true"
-		class="pointer-events-none absolute right-6 top-6 z-0 w-12 opacity-80"
+		class="pointer-events-none absolute top-6 right-6 z-0 w-12 opacity-80"
 		style="color: var(--color-pw-ink); transform: rotate({iconAngle}deg);"
 	/>
 	<div
@@ -34,10 +34,7 @@
 	>
 		{description}
 	</div>
-	<div
-		class="mt-auto border-t-2 pt-5"
-		style="border-color: var(--color-pw-line-soft);"
-	>
+	<div class="mt-auto border-t-2 pt-5" style="border-color: var(--color-pw-line-soft);">
 		{@render children()}
 	</div>
 </div>

@@ -80,7 +80,7 @@ export interface Schedule {
 	instructor: string;
 	avg_difficulty: number;
 	avg_rating: number;
-	parent: string;
+	parents: string[];
 }
 
 export interface GroupedSectionResults {
