@@ -5,6 +5,7 @@ export interface MeetingInfo {
 	endTime: string | null;
 	building: string;
 	room: string;
+  dayMask: number;
 }
 
 export interface TeacherInfo {
@@ -50,7 +51,7 @@ export interface Plan {
 	createdAt: string;
 	updatedAt?: string;
 	courseCount?: number;
-	userID?: string;
+	userId?: string;
 	courses?: PlanCourse[];
 }
 
@@ -64,27 +65,28 @@ export type TermString =
 	| 'Spring/Summer 2027'
 	| 'Unknown';
 
-export interface Schedule {
+export interface SectionMeeting {
 	id: number;
 	section: string;
 	type: string;
 	term: string;
 	mode: string;
-	is_in_person: boolean;
-	class_number: number;
+	isInPerson: boolean;
+	classNumber: number;
 	day: string;
-	start_time: string;
-	end_time: string;
+	startTime: string;
+	endTime: string;
 	building: string;
 	room: string;
 	instructor: string;
-	avg_difficulty: number;
-	avg_rating: number;
+	avgDifficulty: number;
+	avgRating: number;
 	parents: string[];
+	dayMask?: number;
 }
 
 export interface GroupedSectionResults {
-	sections: Record<string, Schedule[]>;
+	sections: Record<string, SectionMeeting[]>;
 	count: number;
 	terms: TermNumber[];
 }

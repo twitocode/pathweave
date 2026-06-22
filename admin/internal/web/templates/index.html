@@ -359,7 +359,7 @@
     function addGroupWithoutLevel() {
       let shell = [...document.querySelectorAll(".level-container")].find((level) => level.dataset.shell === "true");
       if (!shell) {
-        shell = addLevel({ level_number: "", index: 1, groups: [] });
+        shell = addLevel({ levelNumber: "", index: 1, groups: [] });
         shell.dataset.shell = "true";
         shell.querySelector(".level-number").placeholder = "No level system";
       }
@@ -467,15 +467,15 @@
 
     function syncRequirementsStructure() {
       const levels = [...document.querySelectorAll(".level-container")].map((level, index) => ({
-        level_number: level.querySelector(".level-number").value.trim() || null,
+        levelNumber: level.querySelector(".level-number").value.trim() || null,
         index: Number(level.querySelector(".level-index").value) || index + 1,
         groups: [...level.querySelectorAll(".group-container")].map((group) => ({
           name: group.querySelector(".group-name").value.trim(),
           units: group.querySelector(".group-units").value.trim(),
-          choose_one: group.querySelector(".choose-one").checked,
+          chooseOne: group.querySelector(".choose-one").checked,
           requirements: [...group.querySelectorAll(".requirement-row")].map((row) => ({
             kind: row.querySelector(".requirement-kind").value,
-            course_code: row.querySelector(".course-code")?.value.trim() || "",
+            courseCode: row.querySelector(".course-code")?.value.trim() || "",
             text: row.querySelector(".requirement-text")?.value.trim() || "",
           })),
         })),

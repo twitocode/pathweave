@@ -14,7 +14,10 @@ sqlc:
     sqlc generate
 
 lint:
-    ${GO:-go} test ./...
+    ${GOLANGCI_LINT:-golangci-lint} run ./...
+
+format:
+    ${GOLANGCI_LINT:-golangci-lint} fmt ./...
 
 dev:
     ${AIR:-air} -c .air.toml

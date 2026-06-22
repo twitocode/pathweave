@@ -15,9 +15,22 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 load_dotenv()
 
+def snake_to_camel(key: str) -> str:
+    parts = key.split("_")
+    return parts[0] + "".join(part[:1].upper() + part[1:] for part in parts[1:])
+
+
+def camelize_keys(value: Any) -> Any:
+    if isinstance(value, list):
+        return [camelize_keys(item) for item in value]
+    if isinstance(value, dict):
+        return {snake_to_camel(str(key)): camelize_keys(item) for key, item in value.items()}
+    return value
+
+
 def load_json(path: pathlib.Path) -> Any:
     with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+        return camelize_keys(json.load(f))
 
 
 def build_artifacts_payload(data_dir: pathlib.Path = DATA_DIR) -> dict[str, Any]:

@@ -11,18 +11,18 @@ var courseCodePattern = regexp.MustCompile(`\b([A-Z]{2,10}\s\d[A-Z0-9]{2,4})\b`)
 
 type FormInput struct {
 	Name      string       `json:"name"`
-	SourceURL string       `json:"source_url"`
+	SourceURL string       `json:"sourceUrl"`
 	Levels    []LevelInput `json:"levels"`
 }
 
 type RequirementRowInput struct {
 	Kind       string `json:"kind"`
-	CourseCode string `json:"course_code"`
+	CourseCode string `json:"courseCode"`
 	Text       string `json:"text"`
 }
 
 type LevelInput struct {
-	LevelNumber string       `json:"level_number"`
+	LevelNumber string       `json:"levelNumber"`
 	Index       int          `json:"index"`
 	Groups      []GroupInput `json:"groups"`
 }
@@ -30,7 +30,7 @@ type LevelInput struct {
 type GroupInput struct {
 	Name         string                `json:"name"`
 	Units        string                `json:"units"`
-	ChooseOne    bool                  `json:"choose_one"`
+	ChooseOne    bool                  `json:"chooseOne"`
 	Requirements []RequirementRowInput `json:"requirements"`
 }
 
@@ -135,7 +135,7 @@ func buildRequirements(inputLevels []LevelInput) ([]string, json.RawMessage, err
 }
 
 type requirementLevel struct {
-	LevelNumber *string     `json:"level_number"`
+	LevelNumber *string     `json:"levelNumber"`
 	Index       int         `json:"index"`
 	Groups      []unitGroup `json:"groups"`
 }
@@ -144,7 +144,7 @@ type unitGroup struct {
 	Name         string            `json:"name,omitempty"`
 	Group        string            `json:"group,omitempty"`
 	Units        string            `json:"units"`
-	ChooseOne    bool              `json:"choose_one"`
+	ChooseOne    bool              `json:"chooseOne"`
 	Requirements []requirementItem `json:"requirements"`
 }
 
@@ -155,7 +155,7 @@ type requirementDocument struct {
 type requirementItem struct {
 	Type       string  `json:"type"`
 	Text       string  `json:"text"`
-	CourseCode *string `json:"course_code"`
+	CourseCode *string `json:"courseCode"`
 }
 
 func buildRequirementItem(row RequirementRowInput) (requirementItem, string, bool) {
@@ -236,7 +236,7 @@ func editableLevelsFromDocument(doc requirementDocument) []LevelInput {
 
 type legacyRequirementLevel struct {
 	Level      *string     `json:"level"`
-	UnitGroups []unitGroup `json:"unit_groups"`
+	UnitGroups []unitGroup `json:"unitGroups"`
 }
 
 func editableLevelsFromLegacy(legacyLevels []legacyRequirementLevel) []LevelInput {

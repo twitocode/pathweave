@@ -44,7 +44,7 @@ func TestBuildPayload(t *testing.T) {
 		if payload.RequirementCodes[0] != "ECON 2Z03" || payload.RequirementCodes[1] != "ECON 2ZZ3" {
 			t.Fatalf("unexpected codes: %#v", payload.RequirementCodes)
 		}
-		wantJSON := `{"levels":[{"level_number":"II","index":2,"groups":[{"name":"core","units":"3-6","choose_one":true,"requirements":[{"type":"course","text":"ECON 2Z03","course_code":"ECON 2Z03"},{"type":"course","text":"ECON 2ZZ3","course_code":"ECON 2ZZ3"},{"type":"course","text":"ECON 2Z03","course_code":"ECON 2Z03"}]}]}]}`
+		wantJSON := `{"levels":[{"levelNumber":"II","index":2,"groups":[{"name":"core","units":"3-6","chooseOne":true,"requirements":[{"type":"course","text":"ECON 2Z03","courseCode":"ECON 2Z03"},{"type":"course","text":"ECON 2ZZ3","courseCode":"ECON 2ZZ3"},{"type":"course","text":"ECON 2Z03","courseCode":"ECON 2Z03"}]}]}]}`
 		if string(payload.RequirementsByLevel) != wantJSON {
 			t.Fatalf("unexpected requirements json:\n%s", payload.RequirementsByLevel)
 		}
@@ -70,7 +70,7 @@ func TestBuildPayload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		wantJSON := `{"levels":[{"level_number":null,"index":1,"groups":[{"units":"3","choose_one":false,"requirements":[{"type":"course","text":"MATH 1X03","course_code":"MATH 1X03"}]}]}]}`
+		wantJSON := `{"levels":[{"levelNumber":null,"index":1,"groups":[{"units":"3","chooseOne":false,"requirements":[{"type":"course","text":"MATH 1X03","courseCode":"MATH 1X03"}]}]}]}`
 		if string(payload.RequirementsByLevel) != wantJSON {
 			t.Fatalf("unexpected requirements json:\n%s", payload.RequirementsByLevel)
 		}
@@ -108,7 +108,7 @@ func TestBuildPayload(t *testing.T) {
 		if payload.RequirementCodes[0] != "PSYCH 2AA3" {
 			t.Fatalf("unexpected codes: %#v", payload.RequirementCodes)
 		}
-		wantJSON := `{"levels":[{"level_number":"I","index":1,"groups":[{"units":"30","choose_one":false,"requirements":[{"type":"text","text":"(See Admission above.)","course_code":null}]}]},{"level_number":"II","index":2,"groups":[{"name":"core","units":"3","choose_one":false,"requirements":[{"type":"course","text":"PSYCH 2AA3","course_code":"PSYCH 2AA3"}]}]}]}`
+		wantJSON := `{"levels":[{"levelNumber":"I","index":1,"groups":[{"units":"30","chooseOne":false,"requirements":[{"type":"text","text":"(See Admission above.)","courseCode":null}]}]},{"levelNumber":"II","index":2,"groups":[{"name":"core","units":"3","chooseOne":false,"requirements":[{"type":"course","text":"PSYCH 2AA3","courseCode":"PSYCH 2AA3"}]}]}]}`
 		if string(payload.RequirementsByLevel) != wantJSON {
 			t.Fatalf("unexpected requirements json:\n%s", payload.RequirementsByLevel)
 		}
@@ -130,7 +130,7 @@ func TestBuildPayload(t *testing.T) {
 }
 
 func TestLevelsFromRequirements(t *testing.T) {
-	levels, err := LevelsFromRequirements([]byte(`{"levels":[{"level_number":"II","index":2,"groups":[{"name":"core","units":"3-6","choose_one":true,"requirements":[{"type":"course","text":"ECON 2Z03","course_code":"ECON 2Z03"},{"type":"text","text":"Choose 3 units from List A","course_code":null}]}]}]}`))
+	levels, err := LevelsFromRequirements([]byte(`{"levels":[{"levelNumber":"II","index":2,"groups":[{"name":"core","units":"3-6","chooseOne":true,"requirements":[{"type":"course","text":"ECON 2Z03","courseCode":"ECON 2Z03"},{"type":"text","text":"Choose 3 units from List A","courseCode":null}]}]}]}`))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

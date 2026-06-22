@@ -19,15 +19,15 @@ type StageScrapeArtifactsRequest struct {
 }
 
 type StageScrapeArtifactsResult struct {
-	RunID             uuid.UUID `json:"run_id"`
-	CourseCount       int       `json:"course_count"`
-	ProgramCount      int       `json:"program_count"`
-	TeacherCount      int       `json:"teacher_count"`
-	ScheduleTermCount int       `json:"schedule_term_count"`
+	RunID             uuid.UUID `json:"runId"`
+	CourseCount       int       `json:"courseCount"`
+	ProgramCount      int       `json:"programCount"`
+	TeacherCount      int       `json:"teacherCount"`
+	ScheduleTermCount int       `json:"scheduleTermCount"`
 }
 
 type PromoteScrapeRunResult struct {
-	RunID    uuid.UUID `json:"run_id"`
+	RunID    uuid.UUID `json:"runId"`
 	Status   string    `json:"status"`
 	Promoted bool      `json:"promoted"`
 }
@@ -35,7 +35,7 @@ type PromoteScrapeRunResult struct {
 type rawCoursePayload struct {
 	Code          string   `json:"code"`
 	Name          string   `json:"name"`
-	CourseName    string   `json:"course_name"`
+	CourseName    string   `json:"courseName"`
 	Units         string   `json:"units"`
 	Description   string   `json:"description"`
 	Restrictions  string   `json:"restrictions"`
@@ -43,10 +43,10 @@ type rawCoursePayload struct {
 }
 
 type rawProgramPayload struct {
-	ProgramName         string          `json:"program_name"`
+	ProgramName         string          `json:"programName"`
 	URL                 string          `json:"url"`
 	Requirements        []string        `json:"requirements"`
-	RequirementsByLevel json.RawMessage `json:"requirements_by_level"`
+	RequirementsByLevel json.RawMessage `json:"requirementsByLevel"`
 }
 
 type rawTeacherPayload struct {
@@ -65,23 +65,23 @@ type rawScheduleTermPayload struct {
 }
 
 type rawScheduleCoursePayload struct {
-	CourseCode  string              `json:"course_code"`
-	CourseTitle string              `json:"course_title"`
+	CourseCode  string              `json:"courseCode"`
+	CourseTitle string              `json:"courseTitle"`
 	Term        string              `json:"term"`
 	Sections    []rawSectionPayload `json:"sections"`
 }
 
 type rawSectionPayload struct {
-	SectionName string              `json:"section_name"`
+	SectionName string              `json:"sectionName"`
 	Parents     []string            `json:"parents"`
-	ClassNumber int16               `json:"class_number"`
+	ClassNumber int16               `json:"classNumber"`
 	Details     []rawMeetingPayload `json:"details"`
 }
 
 type rawMeetingPayload struct {
 	Days       string `json:"days"`
-	StartTime  string `json:"start_time"`
-	EndTime    string `json:"end_time"`
+	StartTime  string `json:"startTime"`
+	EndTime    string `json:"endTime"`
 	Room       string `json:"room"`
 	Instructor string `json:"instructor"`
 }

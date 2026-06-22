@@ -32,8 +32,8 @@ class BuildArtifactsPayloadTests(unittest.TestCase):
 
             payload = PUBLISHER.build_artifacts_payload(data_dir)
 
-            self.assertEqual(payload["courses"][0]["course_name"], "COMPSCI 1DM3 - Discrete Mathematics")
-            self.assertEqual(payload["programs"][0]["program_name"], "Computer Science")
+            self.assertEqual(payload["courses"][0]["courseName"], "COMPSCI 1DM3 - Discrete Mathematics")
+            self.assertEqual(payload["programs"][0]["programName"], "Computer Science")
             self.assertEqual(payload["teachers"][0]["id"], "rmp_1")
             self.assertEqual(payload["schedules"][0]["term"], "Fall 2026")
 

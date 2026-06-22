@@ -38,7 +38,7 @@ SELECT
       JSON_AGG(
         JSON_BUILD_OBJECT(
           'id', pc.id,
-          'course_id', c.id,
+          'courseId', c.id,
           'code', c.code,
           'name', c.name,
           'description', c.description,
@@ -59,11 +59,11 @@ SELECT
                 JSON_BUILD_OBJECT(
                   'id', t.id,
                   'name', t.name,
-                  'avg_rating', t.avg_rating,
-                  'avg_difficulty', t.avg_difficulty,
+                  'avgRating', t.avg_rating,
+                  'avgDifficulty', t.avg_difficulty,
                   'department', t.department,
-                  'rmp_id', t.rmp_id,
-                  'num_ratings', t.num_ratings
+                  'rmpId', t.rmp_id,
+                  'numRatings', t.num_ratings
                 )
               ), 
               '[]'::json
@@ -84,16 +84,16 @@ SELECT
                   'type', s.type,
                   'term', s.term,
                   'mode', s.mode,
-                  'is_in_person', s.is_in_person,
-                  'class_number', s.class_number,
+                  'isInPerson', s.is_in_person,
+                  'classNumber', s.class_number,
                   'meetings', (
                     SELECT COALESCE(
                       JSON_AGG(
                         JSON_BUILD_OBJECT(
                           'id', sm.id,
                           'days', sm.days,
-                          'start_time', sm.start_time,
-                          'end_time', sm.end_time,
+                          'startTime', sm.start_time,
+                          'endTime', sm.end_time,
                           'building', sm.building,
                           'room', sm.room
                         )
@@ -109,11 +109,11 @@ SELECT
                         JSON_BUILD_OBJECT(
                           'id', teacher.id,
                           'name', teacher.name,
-                          'avg_rating', teacher.avg_rating,
-                          'avg_difficulty', teacher.avg_difficulty,
+                          'avgRating', teacher.avg_rating,
+                          'avgDifficulty', teacher.avg_difficulty,
                           'department', teacher.department,
-                          'rmp_id', teacher.rmp_id,
-                          'num_ratings', teacher.num_ratings
+                          'rmpId', teacher.rmp_id,
+                          'numRatings', teacher.num_ratings
                         )
                       ), 
                       '[]'::json

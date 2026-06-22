@@ -34,7 +34,7 @@ WITH requirement_hierarchy AS (
       'levels',
       jsonb_agg(
         jsonb_build_object(
-          'level_number', prl.level_number,
+          'levelNumber', prl.level_number,
           'index', prl.sort_order,
           'groups', COALESCE(
             (
@@ -42,14 +42,14 @@ WITH requirement_hierarchy AS (
                 jsonb_build_object(
                   'name', prg.group_name,
                   'units', prg.group_units,
-                  'choose_one', prg.choose_one,
+                  'chooseOne', prg.choose_one,
                   'requirements', COALESCE(
                     (
                       SELECT jsonb_agg(
                         jsonb_build_object(
                           'type', CASE WHEN pri.is_course THEN 'course' ELSE 'text' END,
                           'text', pri.requirement_text,
-                          'course_code', pri.course_code
+                          'courseCode', pri.course_code
                         )
                         ORDER BY pri.sort_order, pri.id
                       )

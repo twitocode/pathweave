@@ -38,10 +38,10 @@ func TestScrapeIngestParseMeetingDetails(t *testing.T) {
 
 func TestScrapeIngestBuildSectionReferences(t *testing.T) {
 	sections := []normalizedSection{
-		{ID: 1, Name: "LEC C01", Type: "LEC", ParentName: "", InstructorSet: map[string]struct{}{"Jane Doe": {}}},
-		{ID: 2, Name: "LAB L01", Type: "LAB", ParentName: "LEC C01", InstructorSet: map[string]struct{}{"Jane Doe": {}}},
-		{ID: 3, Name: "TUT T01", Type: "TUT", ParentName: "LEC C01", InstructorSet: map[string]struct{}{}},
-		{ID: 4, Name: "LAB L02", Type: "LAB", ParentName: "", InstructorSet: map[string]struct{}{"Other Person": {}}},
+		{ID: 1, Name: "LEC C01", Type: "LEC", ParentNames: []string{""}, InstructorSet: map[string]struct{}{"Jane Doe": {}}},
+		{ID: 2, Name: "LAB L01", Type: "LAB", ParentNames: []string{"LEC C01"}, InstructorSet: map[string]struct{}{"Jane Doe": {}}},
+		{ID: 3, Name: "TUT T01", Type: "TUT", ParentNames: []string{"LEC C01"}, InstructorSet: map[string]struct{}{}},
+		{ID: 4, Name: "LAB L02", Type: "LAB", ParentNames: []string{""}, InstructorSet: map[string]struct{}{"Other Person": {}}},
 	}
 
 	refs := buildSectionReferences(sections)

@@ -4,23 +4,23 @@ type OnboardingInfo struct {
 	//Screen 1 Who are you
 	Program          string   `json:"program" validate:"required"`
 	Year             int      `json:"year" validate:"required,number"`
-	CompletedCourses []string `json:"completed_courses" validate:"required,dive"`
+	CompletedCourses []string `json:"completedCourses" validate:"required,dive"`
 
 	//Screen 2 Your Life
 	//replace with mapbox specific stuff
 	//will calculate distance myself
-	WakeUpTime  string  `json:"wake_up_time" validate:"required,datetime=15:04"`
+	WakeUpTime  string  `json:"wakeUpTime" validate:"required,datetime=15:04"`
 	Bedtime     string  `json:"bedtime" validate:"required,datetime=15:04"`
-	JobInfo     string  `json:"job_info" validate:"max=1000"`
+	JobInfo     string  `json:"jobInfo" validate:"max=1000"`
 	Lat         float64 `json:"lat" validate:"required"`
 	Lng         float64 `json:"lng" validate:"required"`
-	FuturePlans string  `json:"future_plans" validate:"max=2000"`
+	FuturePlans string  `json:"futurePlans" validate:"max=2000"`
 
 	//Screen 3 Your Goals
 	//1, 2, or, 3
-	ProfessorQuality int      `json:"professor_quality" validate:"required,number"`
-	TeachingStyle    int      `json:"teaching_style" validate:"required,number"`
-	AvoidedCourses   []string `json:"avoided_courses" validate:"required,dive"`
+	ProfessorQuality int      `json:"professorQuality" validate:"required,number"`
+	TeachingStyle    int      `json:"teachingStyle" validate:"required,number"`
+	AvoidedCourses   []string `json:"avoidedCourses" validate:"required,dive"`
 }
 
 type ProgramRequirementsInfo struct {

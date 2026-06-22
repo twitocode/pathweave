@@ -26,26 +26,27 @@ type CourseInfo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Units       int    `json:"units"`
-	LevelNumber int    `json:"level_number"`
+	LevelNumber int    `json:"levelNumber"`
 }
 
-type Schedule struct {
-	ID            int     `json:"id"`
-	Section       string  `json:"section"`
-	Type          string  `json:"type"`
-	Term          string  `json:"term"`
-	Mode          string  `json:"mode"`
-	IsInPerson    bool    `json:"is_in_person"`
-	Day           string  `json:"day"`
-	StartTime     string  `json:"start_time"`
-	EndTime       string  `json:"end_time"`
-	Building      string  `json:"building"`
-	Room          string  `json:"room"`
-	Instructor    string  `json:"instructor"`
-	AvgDifficulty float64 `json:"avg_difficulty"`
-	AvgRating     float64  `json:"avg_rating"`
-	Parents       []string `json:"parents"`
-	ClassNumber   int      `json:"class_number"`
+type SectionMeeting struct {
+	ID            int            `json:"id"`
+	Section       string         `json:"section"`
+	Type          string         `json:"type"`
+	Term          string         `json:"term"`
+	Mode          string         `json:"mode"`
+	IsInPerson    bool           `json:"isInPerson"`
+	Day           string         `json:"day"`
+	StartTime     string         `json:"startTime"`
+	EndTime       string         `json:"endTime"`
+	Building      string         `json:"building"`
+	Room          string         `json:"room"`
+	Instructor    string         `json:"instructor"`
+	AvgDifficulty float64        `json:"avgDifficulty"`
+	AvgRating     float64        `json:"avgRating"`
+	Parents       []string       `json:"parents"`
+	ClassNumber   int            `json:"classNumber"`
+	DayMask       common.DayMask `json:"dayMask"`
 }
 
 func NewCourseService(queries *db.Queries, log *zap.Logger, es *EmbeddingService, ais *AIService) *CourseService {
@@ -94,8 +95,8 @@ func (cs *CourseService) formatCourseInfo(course interface{}) *CourseInfo {
 }
 
 type SchedulesResult struct {
-	Schedules []*Schedule `json:"schedules"`
-	Count     int         `json:"count"`
+	Schedules []*SectionMeeting `json:"schedules"`
+	Count     int               `json:"count"`
 }
 
 func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*SchedulesResult, error) {
@@ -104,10 +105,14 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 		return nil, err
 	}
 
-	schedules := make([]*Schedule, len(rows))
+	schedules := make([]*SectionMeeting, len(rows))
 	count := 0
 	for i, r := range rows {
-		schedules[i] = &Schedule{
+		dayMask, err := common.CreateDayMask(r.StartTime, r.EndTime)
+		if err != nil {
+			return nil, err
+		}
+		schedules[i] = &SectionMeeting{
 			ID:            int(r.ID),
 			Section:       r.Section,
 			Type:          r.Type,
@@ -124,6 +129,7 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 			AvgRating:     common.ToFloat64(r.AvgRating),
 			Parents:       r.Parents,
 			ClassNumber:   int(r.ClassNumber),
+			DayMask:       dayMask,
 		}
 		count++
 	}
@@ -136,9 +142,9 @@ func (cs *CourseService) GetCourseSchedules(ctx context.Context, id int) (*Sched
 }
 
 type GroupedSectionResults struct {
-	Sections map[string][]*Schedule `json:"sections"`
-	Count    int                    `json:"count"`
-	Terms    []string               `json:"terms"`
+	Sections map[string][]*SectionMeeting `json:"sections"`
+	Count    int                          `json:"count"`
+	Terms    []string                     `json:"terms"`
 }
 
 func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code string, term string) (*GroupedSectionResults, error) {
@@ -163,10 +169,15 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code strin
 		cs.log.Warn("could not get terms for course", zap.String("code", code), zap.Error(err))
 	}
 
-	schedules := make(map[string][]*Schedule)
+	schedules := make(map[string][]*SectionMeeting)
 	count := 0
 	for _, r := range rows {
-		schedule := &Schedule{
+		dayMask, err := common.CreateDayMask(r.StartTime, r.EndTime)
+		if err != nil {
+			return nil, err
+		}
+
+		schedule := &SectionMeeting{
 			ID:            int(r.ID),
 			Section:       r.Section,
 			Type:          r.Type,
@@ -183,6 +194,7 @@ func (cs *CourseService) GetCourseSectionsByTerm(ctx context.Context, code strin
 			AvgRating:     common.ToFloat64(r.AvgRating),
 			Parents:       r.Parents,
 			ClassNumber:   int(r.ClassNumber),
+			DayMask:       dayMask,
 		}
 		schedules[r.Section] = append(schedules[r.Section], schedule)
 		count++

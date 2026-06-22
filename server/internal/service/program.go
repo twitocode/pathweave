@@ -9,9 +9,9 @@ import (
 )
 
 type ProgramRequirements struct {
-	ProgramID         int64           `json:"program_id"`
-	ProgramName       string          `json:"program_name"`
-	RequirementGroups json.RawMessage `json:"requirement_groups"`
+	ProgramID         int64           `json:"programId"`
+	ProgramName       string          `json:"programName"`
+	RequirementGroups json.RawMessage `json:"requirementGroups"`
 }
 
 type ProgramService struct {

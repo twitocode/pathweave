@@ -18,16 +18,16 @@ type Plan struct {
 	ID          string       `json:"id"`
 	Title       string       `json:"title"`
 	Term        string       `json:"term"`
-	CreatedAt   string       `json:"created_at"`
-	UpdatedAt   string       `json:"updated_at"`
-	UserID      string       `json:"user_id,omitempty"`
-	CourseCount int          `json:"course_count,omitempty"`
+	CreatedAt   string       `json:"createdAt"`
+	UpdatedAt   string       `json:"updatedAt"`
+	UserID      string       `json:"userId,omitempty"`
+	CourseCount int          `json:"courseCount,omitempty"`
 	Courses     []PlanCourse `json:"courses"`
 }
 
 type PlanCourse struct {
 	ID            string        `json:"id"`
-	CourseID      int64         `json:"course_id"`
+	CourseID      int64         `json:"courseId"`
 	Code          string        `json:"code"`
 	Name          string        `json:"name"`
 	Description   string        `json:"description"`
@@ -40,22 +40,22 @@ type PlanCourse struct {
 }
 
 type SectionInfo struct {
-	ID         int           `json:"id"`
-	Name       string        `json:"name"`
-	Type       string        `json:"type"`
-	Term       string        `json:"term"`
-	Mode       string        `json:"mode"`
-	IsInPerson bool          `json:"is_in_person"`
-	ClassNumber int          `json:"class_number"`
-	Meetings   []MeetingInfo `json:"meetings"`
-	Teachers   []TeacherInfo `json:"teachers"`
+	ID          int           `json:"id"`
+	Name        string        `json:"name"`
+	Type        string        `json:"type"`
+	Term        string        `json:"term"`
+	Mode        string        `json:"mode"`
+	IsInPerson  bool          `json:"isInPerson"`
+	ClassNumber int           `json:"classNumber"`
+	Meetings    []MeetingInfo `json:"meetings"`
+	Teachers    []TeacherInfo `json:"teachers"`
 }
 
 type MeetingInfo struct {
 	ID        int     `json:"id"`
 	Days      string  `json:"days"`
-	StartTime *string `json:"start_time"`
-	EndTime   *string `json:"end_time"`
+	StartTime *string `json:"startTime"`
+	EndTime   *string `json:"endTime"`
 	Building  string  `json:"building"`
 	Room      string  `json:"room"`
 }
@@ -63,11 +63,11 @@ type MeetingInfo struct {
 type TeacherInfo struct {
 	ID            int      `json:"id"`
 	Name          string   `json:"name"`
-	AvgRating     *float64 `json:"avg_rating"`
-	AvgDifficulty *float64 `json:"avg_difficulty"`
+	AvgRating     *float64 `json:"avgRating"`
+	AvgDifficulty *float64 `json:"avgDifficulty"`
 	Department    string   `json:"department"`
-	RmpID         string   `json:"rmp_id"`
-	NumRatings    int      `json:"num_ratings"`
+	RmpID         string   `json:"rmpId"`
+	NumRatings    int      `json:"numRatings"`
 }
 
 func NewPlannerService(queries *db.Queries, _ *zap.Logger) *PlannerService {

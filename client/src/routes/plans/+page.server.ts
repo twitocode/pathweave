@@ -3,16 +3,6 @@ import type { Plan } from '$lib/types';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export interface PlanResult {
-	id: string;
-	title: string;
-	term: Plan['term'];
-	created_at: string;
-	updated_at: string;
-	user_id: string;
-	course_count: number;
-}
-
 export const load: PageServerLoad = async ({ locals, request, fetch }) => {
 	if (!locals.user) {
 		throw redirect(303, '/login');
@@ -40,16 +30,7 @@ export const load: PageServerLoad = async ({ locals, request, fetch }) => {
 			});
 
 			if (res2.ok) {
-				const plans: Plan[] = (Array.isArray(body) ? body : [])
-					.filter(Boolean)
-					.map((x: PlanResult) => ({
-						title: x.title,
-						term: x.term,
-						id: x.id,
-						userID: x.user_id,
-						createdAt: x.created_at,
-						courseCount: x.course_count
-					}));
+				const plans = (Array.isArray(body) ? body : []) as Plan[];
 				const programName = await res2.json();
 
 				return {

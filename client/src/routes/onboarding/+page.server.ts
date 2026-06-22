@@ -11,27 +11,6 @@ export const load: PageServerLoad = async () => {
 	};
 };
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-// disgusting method
-function toSnakeCaseKeys(obj: JsonValue): JsonValue {
-	if (Array.isArray(obj)) {
-		return obj.map((v) => toSnakeCaseKeys(v));
-	}
-	if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
-		const record = obj as Record<string, JsonValue>;
-		return Object.keys(record).reduce(
-			(result, key) => {
-				const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-				result[snakeKey] = toSnakeCaseKeys(record[key]);
-				return result;
-			},
-			{} as Record<string, JsonValue>
-		);
-	}
-	return obj;
-}
-
 export const actions: Actions = {
 	default: async (event) => {
 		const form = await superValidate(event, zod4(onboardingSchema));
@@ -52,7 +31,7 @@ export const actions: Actions = {
 				'Content-Type': 'application/json',
 				cookie: cookieHeader || ''
 			},
-			body: JSON.stringify(toSnakeCaseKeys(payload))
+			body: JSON.stringify(payload)
 		});
 
 		if (res.ok) {

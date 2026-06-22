@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -31,6 +32,24 @@ func TimestamptzToString(pt pgtype.Timestamptz) string {
 		return ""
 	}
 	return pt.Time.UTC().Format(time.RFC3339)
+}
+
+type DayMask int32
+
+func CreateDayMask(start, end pgtype.Time) (DayMask, error) {
+	if !start.Valid || !end.Valid {
+		return 0, fmt.Errorf("invalid time range")
+	}
+	startSlot := int((start.Microseconds/1000000/60)-(7*60)) / 30
+	endSlot := int((end.Microseconds/1000000/60)-(7*60)) / 30
+
+	var mask DayMask
+	for i := startSlot; i < endSlot; i++ {
+		if i >= 0 && i < 30 {
+			mask |= (1 << i)
+		}
+	}
+	return mask, nil
 }
 
 func NumericToFloat64(pn pgtype.Numeric) float64 {

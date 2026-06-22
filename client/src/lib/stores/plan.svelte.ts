@@ -13,7 +13,7 @@ export class PlanStore {
 		courseCount: 0,
 		courses: [],
 		updatedAt: '',
-		userID: ''
+		userId: ''
 	});
 
 	constructor(initialState?: Plan) {

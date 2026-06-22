@@ -4,7 +4,7 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { getCourseSectionsByTerm } from '$lib/server-url';
 	import { getPlanStore } from '$lib/stores/plan.svelte';
-	import type { Schedule, TermNumber } from '$lib/types';
+	import type { SectionMeeting, TermNumber } from '$lib/types';
 	import { cn, getTermString } from '$lib/utils';
 
 	const planStore = getPlanStore();
@@ -14,7 +14,7 @@
 	const courseName = $derived(course?.label.split(': ')[1]);
 	const courseCode = $derived(course?.label.split(': ')[0]);
 
-	let sections: Record<string, Schedule[]> = $state({});
+	let sections: Record<string, SectionMeeting[]> = $state({});
 	let sectionCount: number = $state(0);
 	let terms: string[] = $state([]);
 	let selectedParent: string | null = $state(null);
@@ -22,7 +22,7 @@
 	const restructuredData = $derived.by(() => {
 		type Result = {
 			name: string;
-			schedules: Schedule[];
+			schedules: SectionMeeting[];
 		};
 		const output: (Result & { children: Result[] })[] = [];
 		const childrenList: Result[] = [];
