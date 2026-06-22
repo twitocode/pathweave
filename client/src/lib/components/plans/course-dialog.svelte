@@ -61,6 +61,8 @@
 			sections = data.sections;
 			sectionCount = data.count;
 			terms = data.terms ?? [];
+
+			console.log(data)
 			selectedParent = null; // Reset selection on load
 		}
 	};

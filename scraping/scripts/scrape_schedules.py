@@ -531,32 +531,63 @@ def parse_schedule_segments(raw_text: str) -> List[Dict[str, Any]]:
 
 
 def expand_schedule_blocks(
-    segments: List[Dict[str, Any]], section_blocks: List[Dict[str, Any]]
+    hours_text: str, section_blocks: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
     """Expand parsed time segments into per-day blocks with LEC/LAB/TUT labels."""
-    expanded: List[Dict[str, Any]] = []
+    legend_segments = parse_schedule_segments(hours_text)
+    
+    assigned_segments = []
+    unassigned_sections = []
+    
+    for sec in section_blocks:
+        row_txt = sec.get("row_txt", "")
+        sec_segments = parse_schedule_segments(row_txt)
+        if sec_segments:
+            assigned_segments.append((sec, sec_segments))
+            for s in sec_segments:
+                for ls in list(legend_segments):
+                    if s["days"] == ls["days"] and s["start"] == ls["start"] and s["end"] == ls["end"]:
+                        legend_segments.remove(ls)
+                        break
+        else:
+            unassigned_sections.append(sec)
+            
+    unique_comps = []
+    for sec in unassigned_sections:
+        comp = sec.get("section", "Unknown").split()[0]
+        if comp not in unique_comps:
+            unique_comps.append(comp)
 
-    for segment_idx, segment in enumerate(segments):
-        section = (
-            section_blocks[min(segment_idx, len(section_blocks) - 1)]
-            if section_blocks
-            else {}
-        )
-        section_label: str = section.get("section", "Unknown")
+    comp_to_segs = {c: [] for c in unique_comps}
+    if len(legend_segments) == len(unique_comps):
+        for c, s in zip(unique_comps, legend_segments):
+            comp_to_segs[c].append(s)
+    elif len(unique_comps) > 0:
+        for i, s in enumerate(legend_segments):
+            c = unique_comps[min(i, len(unique_comps)-1)]
+            comp_to_segs[c].append(s)
+
+    for sec in unassigned_sections:
+        comp = sec.get("section", "Unknown").split()[0]
+        assigned_segments.append((sec, comp_to_segs[comp]))
+        
+    expanded: List[Dict[str, Any]] = []
+    for sec, segs in assigned_segments:
+        section_label = sec.get("section", "Unknown")
         component = (
             section_label.split()[0] if section_label != "Unknown" else "Unknown"
         )
-
-        for day in segment["days"]:
-            expanded.append(
-                {
-                    "day": day,
-                    "start": segment["start"],
-                    "end": segment["end"],
-                    "type": component,
-                    "section": section_label,
-                }
-            )
+        for seg in segs:
+            for day in seg["days"]:
+                expanded.append(
+                    {
+                        "day": day,
+                        "start": seg["start"],
+                        "end": seg["end"],
+                        "type": component,
+                        "section": section_label,
+                    }
+                )
 
     return expanded
 
@@ -630,32 +661,20 @@ def combinations_to_sections(
                     "instructor": section_map[label]["instructor"]
                 })
 
-        # Also capture sections that had no schedule blocks (e.g. online)
-        for sec in combo.get("sections", []):
-            label = sec.get("section", "Unknown")
-            if label not in section_map:
-                section_map[label] = {
-                    "section_name": label,
-                    "session": "1",
-                    "status": "Open",
-                    "instructor": sec.get("instructor", "Staff"),
-                    "room": sec.get("location", "TBD"),
-                    "mode": sec.get("mode", "Unknown"),
-                    "parents": [],
-                    "class_number": sec.get("class_number", -1),
-                    "details_seen": set(),
-                    "details": [{
-                        "days": "TBA",
-                        "start_time": "TBA",
-                        "end_time": "",
-                        "room": sec.get("mode", "Online") if sec.get("mode") in ("Online", "Blended") else sec.get("location", "TBD"),
-                        "instructor": sec.get("instructor", "Staff")
-                    }],
-                }
+        # Remove the TBA fallback loop from here
+        pass
 
     # Build final list, stripping internal tracking fields
     result: List[Dict[str, Any]] = []
     for entry in section_map.values():
+        if not entry["details"]:
+            entry["details"].append({
+                "days": "TBA",
+                "start_time": "TBA",
+                "end_time": "",
+                "room": entry["mode"] if entry["mode"] in ("Online", "Blended") else entry["room"],
+                "instructor": entry["instructor"]
+            })
         result.append({
             "section_name": entry["section_name"],
             "session": entry["session"],
@@ -834,10 +853,10 @@ async def scrape_course_combinations(
                             if j == 0:
                                 # First type_block in the group is the parent
                                 parent_label = section_label
-                                section_blocks.append({"section": section_label, "parents": [], "class_number": crn_value, **parsed})
+                                section_blocks.append({"section": section_label, "parents": [], "class_number": crn_value, "row_txt": row_txt, **parsed})
                             else:
                                 # Subsequent type_blocks are children of the parent
-                                section_blocks.append({"section": section_label, "parents": [parent_label], "class_number": crn_value, **parsed})
+                                section_blocks.append({"section": section_label, "parents": [parent_label], "class_number": crn_value, "row_txt": row_txt, **parsed})
                 else:
                     # Fallback: no vsbselectionnew groups found, use flat iteration
                     type_blocks = legend_block.locator(".selection_table .type_block")
@@ -866,7 +885,7 @@ async def scrape_course_combinations(
                         except Exception:
                             pass
 
-                        section_blocks.append({"section": section_label, "parents": [], "class_number": crn_value, **parsed})
+                        section_blocks.append({"section": section_label, "parents": [], "class_number": crn_value, "row_txt": row_txt, **parsed})
 
                 # Prefer the visible hours text; it preserves multi-day blocks better than the h4 aria-label.
                 hours_text = ""
@@ -883,8 +902,7 @@ async def scrape_course_combinations(
                     ).get_attribute("aria-label")
                     hours_text = header_aria or ""
 
-                schedule_segments = parse_schedule_segments(hours_text)
-                day_blocks = expand_schedule_blocks(schedule_segments, section_blocks)
+                day_blocks = expand_schedule_blocks(hours_text, section_blocks)
 
                 combinations.append(
                     {
